@@ -1,0 +1,4188 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<!-- 2016-09-08 jeu. 09:32 -->
+<meta  http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta  name="viewport" content="width=device-width, initial-scale=1" />
+<title>A "Simple" Simulator for the Galves-Löcherbach Model</title>
+<meta  name="generator" content="Org-mode" />
+<meta  name="author" content="Christophe Pouzat" />
+<style type="text/css">
+ <!--/*--><![CDATA[/*><!--*/
+  .title  { text-align: center;
+             margin-bottom: .2em; }
+  .subtitle { text-align: center;
+              font-size: medium;
+              font-weight: bold;
+              margin-top:0; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { font-family: monospace; color: green; }
+  .priority { font-family: monospace; color: orange; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .org-right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .org-left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .org-center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #ccc;
+    box-shadow: 3px 3px 3px #eee;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: visible;
+    padding-top: 1.2em;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    background-color: white;
+    top: -10px;
+    right: 10px;
+    padding: 3px;
+    border: 1px solid black;
+  }
+  pre.src:hover:before { display: inline;}
+  pre.src-sh:before    { content: 'sh'; }
+  pre.src-bash:before  { content: 'sh'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-R:before     { content: 'R'; }
+  pre.src-perl:before  { content: 'Perl'; }
+  pre.src-java:before  { content: 'Java'; }
+  pre.src-sql:before   { content: 'SQL'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.org-right  { text-align: center;  }
+  th.org-left   { text-align: center;   }
+  th.org-center { text-align: center; }
+  td.org-right  { text-align: right;  }
+  td.org-left   { text-align: left;   }
+  td.org-center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara { display: inline; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  /*]]>*/-->
+</style>
+<script type="text/javascript">
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this tag.
+
+Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+The JavaScript code in this tag is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU GPL) as published by the Free Software
+Foundation, either version 3 of the License, or (at your option)
+any later version.  The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+
+@licend  The above is the entire license notice
+for the JavaScript code in this tag.
+*/
+<!--/*--><![CDATA[/*><!--*/
+ function CodeHighlightOn(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(null != target) {
+     elem.cacheClassElem = elem.className;
+     elem.cacheClassTarget = target.className;
+     target.className = "code-highlighted";
+     elem.className   = "code-highlighted";
+   }
+ }
+ function CodeHighlightOff(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(elem.cacheClassElem)
+     elem.className = elem.cacheClassElem;
+   if(elem.cacheClassTarget)
+     target.className = elem.cacheClassTarget;
+ }
+/*]]>*///-->
+</script>
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        displayAlign: "center",
+        displayIndent: "0em",
+
+        "HTML-CSS": { scale: 100,
+                        linebreaks: { automatic: "false" },
+                        webFont: "TeX"
+                       },
+        SVG: {scale: 100,
+              linebreaks: { automatic: "false" },
+              font: "TeX"},
+        NativeMML: {scale: 100},
+        TeX: { equationNumbers: {autoNumber: "AMS"},
+               MultLineWidth: "85%",
+               TagSide: "right",
+               TagIndent: ".8em"
+             }
+});
+</script>
+<script type="text/javascript"
+        src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML"></script>
+</head>
+<body>
+<div id="content">
+<h1 class="title">A "Simple" Simulator for the Galves-Löcherbach Model</h1>
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#orgheadline6">1. Introduction</a>
+<ul>
+<li><a href="#orgheadline1">1.1. Basic numbers and data features</a></li>
+<li><a href="#orgheadline4">1.2. Synaptic weights, leak functions and function \(\varphi\)</a>
+<ul>
+<li><a href="#orgheadline2">1.2.1. \(\varphi\)</a></li>
+<li><a href="#orgheadline3">1.2.2. Synaptic leak functions</a></li>
+</ul>
+</li>
+<li><a href="#orgheadline5">1.3. Required software</a></li>
+</ul>
+</li>
+<li><a href="#orgheadline39">2. Code</a>
+<ul>
+<li><a href="#orgheadline7">2.1. A remark on the code presentation</a></li>
+<li><a href="#orgheadline8">2.2. \(W_{j\rightarrow i}\) generation</a></li>
+<li><a href="#orgheadline9">2.3. Bookkeeping</a></li>
+<li><a href="#orgheadline14">2.4. Connection graph generation and associated functions</a>
+<ul>
+<li><a href="#orgheadline10">2.4.1. <code>mk_graph</code></a></li>
+<li><a href="#orgheadline11">2.4.2. <code>free_graph</code></a></li>
+<li><a href="#orgheadline12">2.4.3. <code>print_graph</code></a></li>
+<li><a href="#orgheadline13">2.4.4. Test code</a></li>
+</ul>
+</li>
+<li><a href="#orgheadline17">2.5. Bookkeeping again</a>
+<ul>
+<li><a href="#orgheadline15">2.5.1. A test with <code>Glib</code></a></li>
+<li><a href="#orgheadline16">2.5.2. An array of <code>GArrays</code></a></li>
+</ul>
+</li>
+<li><a href="#orgheadline21">2.6. Fast computation of synaptic leaks</a>
+<ul>
+<li><a href="#orgheadline18">2.6.1. A test</a></li>
+<li><a href="#orgheadline19">2.6.2. Run time comparison</a></li>
+<li><a href="#orgheadline20">2.6.3. Definitions of the synaptic leak functions</a></li>
+</ul>
+</li>
+<li><a href="#orgheadline27">2.7. History initialization with the mean-field solution</a>
+<ul>
+<li><a href="#orgheadline22">2.7.1. Getting the mean field rate</a></li>
+<li><a href="#orgheadline23">2.7.2. Utility function definitions</a></li>
+<li><a href="#orgheadline24">2.7.3. A program returning \(\varphi(\overline{\nu})\)</a></li>
+<li><a href="#orgheadline25">2.7.4. Getting a numerical estimation of the fixed point values</a></li>
+<li><a href="#orgheadline26">2.7.5. Actual initialization strategy</a></li>
+</ul>
+</li>
+<li><a href="#orgheadline38">2.8. Advancing by one step: to spike or not to spike</a>
+<ul>
+<li><a href="#orgheadline28">2.8.1. "Early phase": function <code>spike_or_not_early</code></a></li>
+<li><a href="#orgheadline29">2.8.2. "Main phase"</a></li>
+<li><a href="#orgheadline30">2.8.3. <code>get_u_i</code></a></li>
+<li><a href="#orgheadline31">2.8.4. <code>varphi</code></a></li>
+<li><a href="#orgheadline32">2.8.5. <code>spike_or_not</code></a></li>
+<li><a href="#orgheadline33">2.8.6. <code>sim_params</code> structure and associated functions</a></li>
+<li><a href="#orgheadline34">2.8.7. <code>mk_one_step</code></a></li>
+<li><a href="#orgheadline35">2.8.8. <code>write_sim_gl_preamble</code></a></li>
+<li><a href="#orgheadline36">2.8.9. <code>write_sim_gl_results</code></a></li>
+<li><a href="#orgheadline37">2.8.10. Program <code>sim_gl</code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#orgheadline42">3. Analysis</a>
+<ul>
+<li><a href="#orgheadline40">3.1. Extracting single neuron spike trains the "elementary way"</a></li>
+<li><a href="#orgheadline41">3.2. Doing the same job with <code>R</code></a></li>
+</ul>
+</li>
+<li><a href="#orgheadline46">4. Tests, examples and how to</a>
+<ul>
+<li><a href="#orgheadline43">4.1. Changing the rng's seed and type</a></li>
+<li><a href="#orgheadline44">4.2. Checking that our code is doing what it is supposed to do</a></li>
+<li><a href="#orgheadline45">4.3. Checking that our code is doing what it is supposed to do (2)</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-orgheadline6" class="outline-2">
+<h2 id="orgheadline6"><span class="section-number-2">1</span> Introduction</h2>
+<div class="outline-text-2" id="text-1">
+</div><div id="outline-container-orgheadline1" class="outline-3">
+<h3 id="orgheadline1"><span class="section-number-3">1.1</span> Basic numbers and data features</h3>
+<div class="outline-text-3" id="text-1-1">
+<p>
+We want to write a simulator in <code>C</code> for the Galves-Löcherbach Model in order to generate test data for the <a href="http://arxiv.org/abs/1604.00419">Duarte et al (2016)</a> inference algorithm. Since the inference will later on be applied to the <a href="https://zenodo.org/record/21589">locust antennal lobe</a><sup><a id="fnr.1" class="footref" href="#fn.1">1</a></sup> data sets, we are going to try to simulate data that more or less look like the real ones. From this view point the following features will be considered<sup><a id="fnr.2" class="footref" href="#fn.2">2</a></sup>:
+</p>
+<ul class="org-ul">
+<li>There are 830 <i>projection neurons</i> (PN) in the antennal lobe, these neurons are excitatory (cholinergic) and fire sodium dependent, propagated, action potentials (that is, classical action potentials).</li>
+<li>There are 300 <i>local neurons</i> (LN) in this structure; they are inhibitory (gabaergic) and fire calcium dependent, <i>local</i>, action potentials.</li>
+<li>The extracellular recordings used to get the data we are going to work on <i>do not catch the calcium spikes of the LN</i>, we therefore see a single cell type, the PN.</li>
+</ul>
+<p>
+It makes sense to model / simulate only the PN population using "a trick": <i>both excitatory and inhibitory</i> are allowed between PNs. The inhibitory connections are functional ones as opposed to an anatomical one, they are due to one or several interposed LNs<sup><a id="fnr.3" class="footref" href="#fn.3">3</a></sup> that are not simulated.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline4" class="outline-3">
+<h3 id="orgheadline4"><span class="section-number-3">1.2</span> Synaptic weights, leak functions and function \(\varphi\)</h3>
+<div class="outline-text-3" id="text-1-2">
+<p>
+Adopting the framework and the notations of <a href="http://arxiv.org/abs/1604.00419">Duarte et al (2016) </a>we will be dealing with two populations of synaptic weights (\(W_{j\rightarrow i}\)) one with relatively small (in absolute value) negative values corresponding to inhibitory coupling (via an interposed LN) and another one with relatively large positive values corresponding to direct excitatory coupling. We will start with a uniform and "large" probability of inhibitory coupling and a uniform and "small" probability of excitatory, coupling. 
+</p>
+</div>
+
+<div id="outline-container-orgheadline2" class="outline-4">
+<h4 id="orgheadline2"><span class="section-number-4">1.2.1</span> \(\varphi\)</h4>
+<div class="outline-text-4" id="text-1-2-1">
+<p>
+The functions \(\varphi_i\) in equations 2.2 and 2.3 in Duarte et al 2016 are going to be the same with the following form depending on two parameters, \(\varphi_0\) and \(k\), set at the beginning of each simulation:
+\[\varphi(u) = \varphi_0 + \mathrm{H}(u) (1-\varphi_0) \left(1-\exp(-u/k)\right)^2 \, , \]
+where \(\mathrm{H}(u)\) stands for <a href="https://en.wikipedia.org/wiki/Heaviside_step_function">Heaviside step function</a> (equal to zero for negative \(u\) and 1 otherwise). If I'm not mistaken, the parameter \(\gamma\) of assumption 1 is then:
+\[\gamma = \frac{1-\varphi_0}{2 k} \, .\]
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline3" class="outline-4">
+<h4 id="orgheadline3"><span class="section-number-4">1.2.2</span> Synaptic leak functions</h4>
+<div class="outline-text-4" id="text-1-2-2">
+<p>
+We are going to work with two types of "synaptic leak" functions&#x2014;the \(g_i(\,)\) &#x2014;one for excitatory and one for inhibitory inputs. The excitatory one will be:
+\[g_e(t) = \exp\left(-(t-d_e)/\tau_e\right) \quad \text{for} \quad t \ge d_e \, ,\]
+where \(d_e\) stands for the synaptic delay and \(\tau_e\) the synaptic time constant. For the inhibitory inputs we are going to use what modelers (in neuroscience) call an alpha function:
+\[g_i(t) = \frac{t-d_i}{\tau_i} \exp \left( 1- \frac{t-d_i}{\tau_i}\right) \quad \text{for} \quad t \ge d_i \, .\]
+</p>
+
+<p>
+The graph of this function looks like (I'm using <a href="http://www.gnuplot.info/">gnuplot</a> to prepare the figures in this document and I include the codes generating the figures):
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-gnuplot" id="orgsrcblock1">set xlabel "Time since presynaptic spike"
+set ylabel "Relative synaptic conductance"
+plot [0:50] [0:1] (x-1)/5*exp(1-(x-1)/5) lw 2 lc rgb "black"
+</pre>
+</div>
+
+
+<div class="figure">
+<p><img src="alpha_function_graph.png" alt="alpha_function_graph.png" />
+</p>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline5" class="outline-3">
+<h3 id="orgheadline5"><span class="section-number-3">1.3</span> Required software</h3>
+<div class="outline-text-3" id="text-1-3">
+<p>
+The code will be written in <code>C</code>. If you want a clear and quick introduction to this language, check Ben Klemens: <a href="http://modelingwithdata.org/about_the_book.html">Modeling With Data</a>. To compile the code you will need a <code>C</code> compiler like <a href="https://gcc.gnu.org/">gcc</a>. If you are using <code>Linux</code> or <code>MacOS</code> it's in a package from your favorite distribution, if you are using <code>Windows</code> you will have to install <a href="https://cygwin.com/index.html">Cygwin</a>. The heavy computational work is going to be performed mainly by the <a href="http://www.gnu.org/software/gsl/">gsl</a> (the <i>GNU Scientific Library</i>) that is easily installed through your package manager (from now on, for windows users, the "package manager" refers to the one of <code>Cygwin</code>). We are going to make extensive use of "variable length" arrays, where the spike times of our simulated neurons are going to be stored&#x2014;and we do not know when we start a simulation how many spikes each neuron is going to fire&#x2014;; we will use the <code>GArray</code> data type from <a href="http://www.ibm.com/developerworks/linux/tutorials/l-glib/">libglib</a>, a library that should be available from the package manager on Linux and MacOS and that is available from Cygwin's package manager for Windows. The graphs will be generated with <a href="http://www.gnuplot.info/">gnuplot</a> as you just saw.
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline39" class="outline-2">
+<h2 id="orgheadline39"><span class="section-number-2">2</span> Code</h2>
+<div class="outline-text-2" id="text-2">
+</div><div id="outline-container-orgheadline7" class="outline-3">
+<h3 id="orgheadline7"><span class="section-number-3">2.1</span> A remark on the code presentation</h3>
+<div class="outline-text-3" id="text-2-1">
+<p>
+The <a href="https://en.wikipedia.org/wiki/Literate_programming">literate programming</a> approach is used here. This means that the code is broken into "manageable" pieces that are individually explained, they are then pasted together to give the code that will actually get compiled. These manageable pieces are called blocs and each bloc gets a name like: <code>&lt;&lt;name-of-the-bloc&gt;&gt;</code> upon definition. It is then referred to by this name when used in subsequent codes. See Schulte, Davison, Dye and Dominik (2010) <a href="https://www.jstatsoft.org/article/view/v046i03">A Multi-Language Computing Environment for Literate Programming and Reproducible Research </a>for further explanations.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline8" class="outline-3">
+<h3 id="orgheadline8"><span class="section-number-3">2.2</span> \(W_{j\rightarrow i}\) generation</h3>
+<div class="outline-text-3" id="text-2-2">
+<p>
+We are going to start with a simple scheme for each pair \((j,i)\) where \(j\) is presynaptic and \(i\) is postsynaptic we:
+</p>
+
+<ol class="org-ol">
+<li>Draw a (pseudo-)random number with a uniform distribution on \([0,1)\); if this number is larger than <code>p_i</code> (a parameter of our program) then we go to 2, otherwise we "create" an inhibitory connection between \(j\) and \(i\) and we draw it weight uniformly between <code>w_i_min</code> and <code>w_i_max</code> (both &lt; 0 and parameters of the program).</li>
+<li>Draw a random number with a uniform distribution on \([0,1)\); if this number is larger than <code>p_e</code> (a parameter of our program) then we go to the next pair, otherwise we "create" an excitatory connection between \(j\) and \(i\) and we draw it weight uniformly between <code>w_e_min</code> and <code>w_e_max</code> (both &gt; 0 and parameters of the program) and we go to the next pair.</li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-orgheadline9" class="outline-3">
+<h3 id="orgheadline9"><span class="section-number-3">2.3</span> Bookkeeping</h3>
+<div class="outline-text-3" id="text-2-3">
+<p>
+Each neuron is going to  be uniquely identified by it's index, an integer running from 0 to I-1. Two arrays and an unsigned integer (a <code>size_t</code>) are going to be associated to each neuron:
+</p>
+<ul class="org-ul">
+<li>The unsigned integer contains the number of presynaptic connections (excitatory + inhibitory). We will call <code>size</code> this element.</li>
+<li>An array of unsigned integers (I'm referring here to the corresponding <a href="https://en.wikipedia.org/wiki/C_syntax#Primitive_data_types">C types</a>) containing the indices of its presynaptic neurons. We will call this array <code>idx</code> and it will be a pointer to a <a href="https://www.gnu.org/software/gsl/manual/html_node/Vectors.html#Vectors">gsl_vector_uint</a>.</li>
+<li>An array of reals (<code>double</code> in <code>C</code> terminology) containing the corresponding \(W_{j\rightarrow i}\) values (&lt; 0 for inhibitory connections and &gt; 0 for excitatory ones). We will call this array <code>w</code> and it will be pointer to a <a href="https://www.gnu.org/software/gsl/manual/html_node/Vectors.html#Vectors">gsl_vector</a> (we do not need an extension like the <code>_uint</code> above, since the <code>gsl_vector</code> is of type <code>double</code> by default).</li>
+</ul>
+
+<p>
+Notice that with these choices a single neuron can appear twice in <code>idx</code> because it could form a (direct) excitatory connection and an indirect (via a <code>LN</code>) inhibitory connection with the considered neuron. <i>This is a peculiarity of the network we are modeling here and not a general property of actual networks</i> (in general the contrary is true).
+</p>
+
+<p>
+In <code>C</code> the logical step is then to define a new type containing different elements, that is a new <a href="https://en.wikipedia.org/wiki/C_syntax#Structures_and_unions">structure</a> that we will call <code>presynaptic</code> and that is declared as follows:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock2">typedef struct
+{
+  size_t size;
+  gsl_vector_uint * idx;
+  gsl_vector * w; 
+} presynaptic;
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline14" class="outline-3">
+<h3 id="orgheadline14"><span class="section-number-3">2.4</span> Connection graph generation and associated functions</h3>
+<div class="outline-text-3" id="text-2-4">
+</div><div id="outline-container-orgheadline10" class="outline-4">
+<h4 id="orgheadline10"><span class="section-number-4">2.4.1</span> <code>mk_graph</code></h4>
+<div class="outline-text-4" id="text-2-4-1">
+<p>
+We can now define a <code>C</code> function that creates a random graph following the above prescription. This function takes 8 parameters:
+</p>
+<ul class="org-ul">
+<li><b>n_neurons</b> (size_t&#x2014;a type of unsigned integer used for indexing&#x2014;): the number of neurons in the network.</li>
+<li><b>p_e</b> (double): the probability of excitatory connection.</li>
+<li><b>w_e_min</b> (double): the minimal excitatory weight.</li>
+<li><b>w_e_max</b> (double): the maximal excitatory weight.</li>
+<li><b>p_i</b> (double): the probability of inhibitory connection.</li>
+<li><b>w_i_min</b> (double): the minimal inhibitory weight.</li>
+<li><b>w_i_max</b> (double): the maximal inhibitory weight.</li>
+<li><b>r</b> (a pointer to a <a href="https://www.gnu.org/software/gsl/manual/html_node/Random-number-generator-initialization.html#Random-number-generator-initialization">gsl_rng</a>): a pointer on an allocated <code>gsl_rng</code>.</li>
+</ul>
+<p>
+The function returns a pointer to a pointer to <code>presynaptic</code> structures is everything goes fine and a <code>NULL</code> pointer otherwise (together with a message printed on the <code>stderr</code>).
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock3">presynaptic ** mk_graph(size_t n_neurons,
+			double p_e, double w_e_min, double w_e_max,
+			double p_i, double w_i_min, double w_i_max,
+			gsl_rng * r)
+{
+  // Check that the parameters are correct
+  if (p_e &lt; 0 || p_e &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= p_e &lt;= 1.\n");
+      return NULL;
+    }
+  if (p_i &lt; 0 || p_i &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= p_i &lt;= 1.\n");
+      return NULL;
+    }
+  if (w_e_min &lt;= 0 || w_e_max &lt;= 0)
+    {
+      fprintf(stderr,"Excitatory weights must be &gt; 0.\n");
+      return NULL;
+    }
+  if (w_e_min &gt;= w_e_max)
+    {
+      fprintf(stderr,"We must have w_e_min &lt; w_e_max.\n");
+      return NULL;
+    }
+  if (w_i_min &gt;= 0 || w_i_max &gt;= 0)
+    {
+      fprintf(stderr,"Inhibitory weights must be &lt; 0.\n");
+      return NULL;
+    }
+  if (w_i_min &gt;= w_i_max)
+    {
+      fprintf(stderr,"We must have w_i_min &lt; w_i_max.\n");
+      return NULL;
+    }
+  // allocate memory for the result
+  presynaptic **graph = malloc(n_neurons*sizeof(presynaptic*));
+  for (size_t n_idx=0; n_idx &lt; n_neurons; n_idx++)
+    { // For each postsynaptic neuron
+      uint idx[n_neurons*2];
+      double w[n_neurons*2];
+      size_t n=0; // counts the number of actual connections
+      for (size_t pre_idx=0; pre_idx &lt; n_neurons; pre_idx++)
+	{ // For each potential presynaptic neuron
+	  if (pre_idx == n_idx) continue; // No autapses!
+	  if(gsl_ran_flat(r,0.0,1.0) &lt;= p_e)
+	    {// there is an excitatory connection
+	      idx[n]=pre_idx; // add it to the list
+	      w[n]=gsl_ran_flat(r,w_e_min,w_e_max); // draw its weight
+	      n++; // increase n by 1
+	    }
+	  if(gsl_ran_flat(r,0.0,1.0) &lt;= p_i)
+	    {// there is an inhibitory connection
+	      idx[n]=pre_idx; // add it to the list
+	      w[n]=gsl_ran_flat(r,w_i_min,w_i_max); // draw its weight
+	      n++; // increase n by 1
+	    }
+	} // End of loop on each potential presynaptic neuron
+      // Initialize the presynaptic structure for neuron n_idx
+      // Start by allocating the required memory
+      graph[n_idx] = malloc(sizeof(presynaptic));
+      graph[n_idx]-&gt;size=n;
+      if (n &gt; 0)
+	{
+	 graph[n_idx]-&gt;w = gsl_vector_alloc(n);
+	 graph[n_idx]-&gt;idx = gsl_vector_uint_alloc(n);
+	 // Assign values
+	 for (size_t pre_idx=0; pre_idx &lt; n; pre_idx++)
+	   {
+	     gsl_vector_uint_set(graph[n_idx]-&gt;idx,pre_idx,idx[pre_idx]);
+	     gsl_vector_set(graph[n_idx]-&gt;w,pre_idx,w[pre_idx]);
+	   } 
+	}
+    }
+  return graph;
+}
+</pre>
+</div>
+
+<p>
+Notice that with this definition, if a presynaptic neuron makes two connections with a postsynaptic one (an excitatory <i>and</i> an inhibitory) the corresponding weights are one after the other in the corresponding <code>w</code> element of the <code>presynaptic</code> structure. This will be exploited when the spike trains will be generated.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline11" class="outline-4">
+<h4 id="orgheadline11"><span class="section-number-4">2.4.2</span> <code>free_graph</code></h4>
+<div class="outline-text-4" id="text-2-4-2">
+<p>
+Since function <code>mk_graph</code> allocates memory, we have to free this memory before leaving our program; this will be the job of <code>free_graph</code>. It takes a two parameters: 
+</p>
+<ul class="org-ul">
+<li><b>graph</b> (pointer to pointer to <code>presynapic</code>).</li>
+<li><b>n_neurons</b> (size_t): the number of neurons.</li>
+</ul>
+<p>
+It returns 0 if everything goes fine.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock4">int free_graph(presynaptic **graph, size_t n_neurons)
+{
+  for (size_t n_idx=0; n_idx&lt;n_neurons; n_idx++)
+    {
+      if (graph[n_idx]-&gt;size &gt; 0)
+	{
+	  gsl_vector_free(graph[n_idx]-&gt;w);
+	  gsl_vector_uint_free(graph[n_idx]-&gt;idx);
+	}
+      free(graph[n_idx]);
+      }
+  free(graph);
+  return 0;
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline12" class="outline-4">
+<h4 id="orgheadline12"><span class="section-number-4">2.4.3</span> <code>print_graph</code></h4>
+<div class="outline-text-4" id="text-2-4-3">
+<p>
+To facilitate testing, we define function <code>print_graph</code> that prints to the <code>stdout</code> the graph with one "paragraph" per postsynaptic neuron, starting with a line <code>Postsynaptic neuron: i</code> and followed by as many lines as connections, each of those line being built following this scheme:
+</p>
+<ul class="org-ul">
+<li><code>W(j -&gt; i) = value</code>, where <code>j</code> and <code>i</code> are integers and where <code>value</code> is a real.</li>
+</ul>
+<p>
+One blank line is left between paragraphs. The functions takes the same arguments as function <code>free_graph</code>.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock5">int print_graph(presynaptic **graph, size_t n_neurons)
+{
+  for (size_t n_idx=0; n_idx&lt;n_neurons; n_idx++)
+    {
+      fprintf(stdout,"Postsynaptic neuron: %d\n",(int) n_idx);
+      if (graph[n_idx]-&gt;size &gt; 0)
+	{
+	 for (size_t pre_idx=0; pre_idx&lt;graph[n_idx]-&gt;size; pre_idx++)
+	   {
+	     fprintf(stdout,"\t W(%d -&gt; %d) = %g\n",
+		     (int) gsl_vector_uint_get(graph[n_idx]-&gt;idx,pre_idx),
+		     (int) n_idx,
+		     gsl_vector_get(graph[n_idx]-&gt;w,pre_idx)); 
+	       
+	   } 
+	}
+      fprintf(stdout,"\n");
+    }
+  return 0;
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline13" class="outline-4">
+<h4 id="orgheadline13"><span class="section-number-4">2.4.4</span> Test code</h4>
+<div class="outline-text-4" id="text-2-4-4">
+<p>
+We now write a program that tests our collection of functions. This program takes from the command line the following parameters:
+</p>
+
+<ul class="org-ul">
+<li><b>n_neurons</b>: the number of neurons in the network.</li>
+<li><b>p_e</b>: the probability of excitatory connection (default set at 0.1).</li>
+<li><b>w_e_min</b>: the minimal weight of excitatory connections (default set at 0.2).</li>
+<li><b>w_e_max</b>: the maximal weight of excitatory connections (default set at 0.4).</li>
+<li><b>p_i</b>: the probability of inhibitory connection (default set at 0.2).</li>
+<li><b>w_i_min</b>: the minimal weight of inhibitory connections (default set at -0.1).</li>
+<li><b>w_i_max</b>: the maximal weight of inhibitory connections (default set at -0.05).</li>
+</ul>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock6">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;getopt.h&gt;
+#include &lt;gsl/gsl_vector.h&gt;
+#include &lt;gsl/gsl_vector_uint.h&gt;
+#include &lt;gsl/gsl_rng.h&gt;
+#include &lt;gsl/gsl_randist.h&gt;
+
+&lt;&lt;presynaptic&gt;&gt;
+
+presynaptic ** mk_graph(size_t n_neurons,
+			double p_e, double w_e_min, double w_e_max,
+			double p_i, double w_i_min, double w_i_max,
+			gsl_rng * r);
+
+int free_graph(presynaptic **graph, size_t n_neurons);
+
+int print_graph(presynaptic **graph, size_t n_neurons);
+
+void print_usage_test_graph();
+
+int read_args_test_graph(int argc, char ** argv,
+			 size_t * n_neurons,
+			 double * p_e, double * w_e_min, double * w_e_max,
+			 double * p_i, double * w_i_min, double * w_i_max);
+
+int main(int argc, char ** argv)
+{
+  size_t n_neurons;
+  double p_e, w_e_min, w_e_max;
+  double p_i, w_i_min, w_i_max;
+
+  int status = read_args_test_graph(argc, argv, &amp;n_neurons,
+				    &amp;p_e, &amp;w_e_min, &amp;w_e_max,
+				    &amp;p_i, &amp;w_i_min, &amp;w_i_max);
+
+  if (status == -1) exit (EXIT_FAILURE);
+  
+  const gsl_rng_type * T;
+  gsl_rng * r;
+  gsl_rng_env_setup();
+
+  T = gsl_rng_default;
+  r = gsl_rng_alloc (T);
+
+  presynaptic **graph=mk_graph(n_neurons,
+			       p_e, w_e_min, w_e_max,
+			       p_i, w_i_min, w_i_max,
+			       r);
+  gsl_rng_free (r);
+  print_graph(graph, n_neurons);
+  free_graph(graph, n_neurons);
+  exit (EXIT_SUCCESS); 
+}
+
+&lt;&lt;mk_graph&gt;&gt;
+
+&lt;&lt;free_graph&gt;&gt;
+
+&lt;&lt;print_graph&gt;&gt;
+
+&lt;&lt;print_usage_test_graph&gt;&gt;
+
+&lt;&lt;read_args_test_graph&gt;&gt;
+</pre>
+</div>
+
+<p>
+The <code>&lt;&lt;print_usage_test_graph&gt;&gt;</code> function is defined next:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock7">void print_usage_test_graph() {
+  printf("Usage: \n"
+	 "  --n_neurons &lt;positive integer&gt;: the number of neurons in the "
+	 "network\n"
+	 "  --p_e &lt;double in (0,1)&gt;: the probability of excitatory "
+	 "connection between two neurons\n"
+	 "  --w_e_min &lt;positive double&gt;: the minimal excitatory synaptic "
+	 "weight\n"
+	 "  --w_e_min &lt;positive double&gt;: the maximal excitatory synaptic "
+	 "weight\n"
+	 "  --p_i &lt;double in (0,1)&gt;: the probability of inhibitory "
+	 "connection between two neurons\n"
+	 "  --w_i_min &lt;negative double&gt;: the minimal inhibitory synaptic "
+	 "weight\n"
+	 "  --w_i_max &lt;negative double&gt;: the maximal inhibitory synaptic "
+	 "weight\n"
+	 "\n"
+	 "The connection probalities are uniform. The synaptic weights "
+	 "are drawn from\n"
+	 "uniform distributions.\n"
+	 "The rng seed can be set through the GSL_RNG_SEED environment "
+	 "variable.\n"
+	 "The rng type can be set through the GSL_RNG_TYPE environment "
+	 "variable.\n");
+}
+</pre>
+</div>
+
+<p>
+The <code>&lt;&lt;read_args_test_graph&gt;&gt;</code> is now defined:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock8">int read_args_test_graph(int argc, char ** argv,
+			 size_t * n_neurons,
+			 double * p_e, double * w_e_min, double * w_e_max,
+			 double * p_i, double * w_i_min, double * w_i_max)
+{
+  if (argc == 1) {
+    print_usage_test_graph();
+    return -1;
+  }
+  // Define default values
+  *p_e = 0.1;
+  *w_e_min = 0.2;
+  *w_e_max = 0.4;
+  *p_i = 0.2;
+  *w_i_min = -0.1;
+  *w_i_max = -0.05;
+  {int opt;
+    static struct option long_options[] = {
+      {"n_neurons",required_argument,NULL,'n'},
+      {"p_e",optional_argument,NULL,'a'},
+      {"w_e_min",optional_argument,NULL,'b'},
+      {"w_e_max",optional_argument,NULL,'c'},
+      {"p_i",optional_argument,NULL,'d'},
+      {"w_i_min",optional_argument,NULL,'e'},
+      {"w_i_max",optional_argument,NULL,'f'},
+      {"help",no_argument,NULL,'h'},
+      {NULL,0,NULL,0}
+    };
+    int long_index =0;
+    while ((opt = getopt_long(argc,argv,"hn:a:b:c:d:e:f:",long_options,\
+			      &amp;long_index)) != -1) {
+      switch(opt) {
+      case 'n':
+	{
+	  int n=atoi(optarg);
+	  if (n &lt;= 0)
+	    {
+	      fprintf(stderr,"The number of neurons should be &gt; 0.\n");
+	      return -1;
+	    }
+	  *n_neurons=(size_t) n; 
+	}
+	break;
+      case 'a': *p_e=atof(optarg);
+	break;
+      case 'b': *w_e_min=atof(optarg);
+	break;
+      case 'c': *w_e_max=atof(optarg);
+	break;
+      case 'd': *p_i=atof(optarg);
+	break;
+      case 'e': *w_i_min=atof(optarg);
+	break;
+      case 'f': *w_i_max=atof(optarg);
+	break;
+      case 'h': print_usage_test_graph();
+	return -1;
+      default : print_usage_test_graph();
+	return -1;
+      }
+    }
+  }
+  // Check that the parameters are correct
+  if (*p_e &lt; 0 || *p_e &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= p_e &lt;= 1.\n");
+      return -1;
+    }
+  if (*p_i &lt; 0 || *p_i &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= p_i &lt;= 1.\n");
+      return -1;
+    }
+  if (*w_e_min &lt;= 0 || *w_e_max &lt;= 0)
+    {
+      fprintf(stderr,"Excitatory weights must be &gt; 0.\n");
+      return -1;
+    }
+  if (*w_e_min &gt;= *w_e_max)
+    {
+      fprintf(stderr,"We must have w_e_min &lt; w_e_max.\n");
+      return -1;
+    }
+  if (*w_i_min &gt;= 0 || *w_i_max &gt;= 0)
+    {
+      fprintf(stderr,"Inhibitory weights must be &lt; 0.\n");
+      return -1;
+    }
+  if (*w_i_min &gt;= *w_i_max)
+    {
+      fprintf(stderr,"We must have w_i_min &lt; w_i_max.\n");
+      return -1;
+    }
+  return 0;
+}
+</pre>
+</div>
+
+<p>
+To facilitate compilation we define a <code>makefile</code> that we save in a file called <code>Makefile</code>:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-makefile" id="orgsrcblock9">P=programe_name
+OBJECTS=
+CFLAGS= -g -Wall -O3 -std=gnu11
+LDLIBS= `pkg-config --libs gsl` 
+
+$(P): $(OBJECTS)
+</pre>
+</div>
+
+<p>
+The compilation is then done with the command:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock10">make P=test_graph
+</pre>
+</div>
+
+<pre class="example">
+cc -g -Wall -O3 -std=gnu11    test_graph.c  `pkg-config --libs gsl`  -o test_graph
+</pre>
+
+<p>
+A first test is done with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock11">./test_graph --n_neurons 8
+</pre>
+</div>
+
+<pre class="example">
+Postsynaptic neuron: 0
+	 W(1 -&gt; 0) = -0.0858691
+
+Postsynaptic neuron: 1
+	 W(3 -&gt; 1) = -0.083323
+	 W(7 -&gt; 1) = -0.0851737
+
+Postsynaptic neuron: 2
+	 W(0 -&gt; 2) = -0.0675937
+	 W(3 -&gt; 2) = -0.0650366
+	 W(4 -&gt; 2) = -0.0748798
+	 W(6 -&gt; 2) = 0.225625
+	 W(7 -&gt; 2) = 0.258428
+
+Postsynaptic neuron: 3
+	 W(2 -&gt; 3) = -0.077959
+	 W(4 -&gt; 3) = 0.262259
+
+Postsynaptic neuron: 4
+	 W(2 -&gt; 4) = 0.267746
+	 W(2 -&gt; 4) = -0.0781729
+	 W(7 -&gt; 4) = -0.0627957
+
+Postsynaptic neuron: 5
+	 W(2 -&gt; 5) = 0.322613
+	 W(4 -&gt; 5) = -0.0844606
+
+Postsynaptic neuron: 6
+	 W(3 -&gt; 6) = -0.0938533
+	 W(4 -&gt; 6) = 0.364014
+	 W(4 -&gt; 6) = -0.0842127
+	 W(5 -&gt; 6) = -0.0667785
+	 W(7 -&gt; 6) = -0.0781828
+
+Postsynaptic neuron: 7
+</pre>
+
+<p>
+A second test is done with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock12">./test_graph --n_neurons=8 --p_e=1.0
+</pre>
+</div>
+
+<pre class="example">
+Postsynaptic neuron: 0
+	 W(1 -&gt; 0) = 0.232582
+	 W(2 -&gt; 0) = 0.246331
+	 W(3 -&gt; 0) = 0.348861
+	 W(4 -&gt; 0) = 0.351989
+	 W(5 -&gt; 0) = 0.360881
+	 W(6 -&gt; 0) = 0.295106
+	 W(7 -&gt; 0) = 0.242638
+	 W(7 -&gt; 0) = -0.083323
+
+Postsynaptic neuron: 1
+	 W(0 -&gt; 1) = 0.388743
+	 W(2 -&gt; 1) = 0.333113
+	 W(3 -&gt; 1) = 0.236457
+	 W(4 -&gt; 1) = 0.212584
+	 W(5 -&gt; 1) = 0.327426
+	 W(6 -&gt; 1) = 0.339853
+	 W(6 -&gt; 1) = -0.0935379
+	 W(7 -&gt; 1) = 0.241556
+
+Postsynaptic neuron: 2
+	 W(0 -&gt; 2) = 0.225625
+	 W(1 -&gt; 2) = 0.258428
+	 W(3 -&gt; 2) = 0.286369
+	 W(3 -&gt; 2) = -0.0799804
+	 W(4 -&gt; 2) = 0.234134
+	 W(5 -&gt; 2) = 0.262259
+	 W(6 -&gt; 2) = 0.302206
+	 W(7 -&gt; 2) = 0.232162
+
+Postsynaptic neuron: 3
+	 W(0 -&gt; 3) = 0.335521
+	 W(1 -&gt; 3) = 0.218022
+	 W(2 -&gt; 3) = 0.287308
+	 W(4 -&gt; 3) = 0.355507
+	 W(5 -&gt; 3) = 0.274086
+	 W(6 -&gt; 3) = 0.348817
+	 W(7 -&gt; 3) = 0.324391
+
+Postsynaptic neuron: 4
+	 W(0 -&gt; 4) = 0.322613
+	 W(1 -&gt; 4) = 0.34476
+	 W(1 -&gt; 4) = -0.0978848
+	 W(2 -&gt; 4) = 0.224328
+	 W(3 -&gt; 4) = 0.288026
+	 W(5 -&gt; 4) = 0.286525
+	 W(6 -&gt; 4) = 0.328473
+	 W(7 -&gt; 4) = 0.224587
+	 W(7 -&gt; 4) = -0.0589964
+
+Postsynaptic neuron: 5
+	 W(0 -&gt; 5) = 0.263149
+	 W(0 -&gt; 5) = -0.0928886
+	 W(1 -&gt; 5) = 0.337038
+	 W(1 -&gt; 5) = -0.0781828
+	 W(2 -&gt; 5) = 0.373633
+	 W(2 -&gt; 5) = -0.0757779
+	 W(3 -&gt; 5) = 0.380095
+	 W(3 -&gt; 5) = -0.0660182
+	 W(4 -&gt; 5) = 0.396731
+	 W(6 -&gt; 5) = 0.398969
+	 W(7 -&gt; 5) = 0.327789
+
+Postsynaptic neuron: 6
+	 W(0 -&gt; 6) = 0.238319
+	 W(1 -&gt; 6) = 0.399345
+	 W(1 -&gt; 6) = -0.067423
+	 W(2 -&gt; 6) = 0.277996
+	 W(3 -&gt; 6) = 0.322041
+	 W(4 -&gt; 6) = 0.335543
+	 W(5 -&gt; 6) = 0.216277
+	 W(5 -&gt; 6) = -0.07604
+	 W(7 -&gt; 6) = 0.294396
+
+Postsynaptic neuron: 7
+	 W(0 -&gt; 7) = 0.266911
+	 W(1 -&gt; 7) = 0.330709
+	 W(2 -&gt; 7) = 0.219985
+	 W(3 -&gt; 7) = 0.248228
+	 W(4 -&gt; 7) = 0.284679
+	 W(5 -&gt; 7) = 0.373768
+	 W(5 -&gt; 7) = -0.0917077
+	 W(6 -&gt; 7) = 0.321291
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline17" class="outline-3">
+<h3 id="orgheadline17"><span class="section-number-3">2.5</span> Bookkeeping again</h3>
+<div class="outline-text-3" id="text-2-5">
+<p>
+Now that we have a defined network to simulate we have to decide how this network activity, that is the spike trains of each neuron, are going to be stored. The "nasty" part is that we do not know at the start (of the simulation) how many spikes each neuron is going to generate. This could orient us to a <a href="https://en.wikipedia.org/wiki/Linked_list">linked list</a> storage but we should keep in mind that we will have to "visit" the spike trains of each neuron at each time step of the simulation; we therefore want something like an extensible memory with fast access. A quick and clean way to get that is using the <code>Glib Array</code> type <a href="http://www.ibm.com/developerworks/linux/tutorials/l-glib/">GArray</a>. 
+</p>
+</div>
+
+<div id="outline-container-orgheadline15" class="outline-4">
+<h4 id="orgheadline15"><span class="section-number-4">2.5.1</span> A test with <code>Glib</code></h4>
+<div class="outline-text-4" id="text-2-5-1">
+<p>
+In order to make sure that our <code>Glib</code> set up is fine, let us try the first example of the <code>Basic operations of arrays</code> from the <a href="http://www.ibm.com/developerworks/linux/tutorials/l-glib/">IBM tutorial</a> we referred to before. We write the following code in a file named <code>ex-garray-1.c</code>:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock13">#include &lt;glib.h&gt;
+#include &lt;stdio.h&gt;
+int main(int argc, char** argv) {
+ GArray* a = g_array_new(FALSE, FALSE, sizeof(char*));
+ char* first = "hello", *second = "there", *third = "world";
+ g_array_append_val(a, first);
+ g_array_append_val(a, second);
+ g_array_append_val(a, third);
+ printf("There are now %d items in the array\n", a-&gt;len);
+ printf("The first item is '%s'\n", g_array_index(a, char*, 0));
+ printf("The third item is '%s'\n", g_array_index(a, char*, 2));
+ g_array_remove_index(a, 1);
+ printf("There are now %d items in the array\n", a-&gt;len);
+ g_array_free(a, FALSE);
+ return 0;
+}
+</pre>
+</div>
+
+<p>
+We compile it with (adapted from the top of the same document):
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock14">gcc `pkg-config --cflags --libs glib-2.0` -o ex-garray-1 ex-garray-1.c
+</pre>
+</div>
+
+<p>
+And we run it with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock15">./ex-garray-1
+</pre>
+</div>
+
+<pre class="example">
+There are now 3 items in the array
+The first item is 'hello'
+The third item is 'world'
+There are now 2 items in the array
+</pre>
+</div>
+</div>
+
+<div id="outline-container-orgheadline16" class="outline-4">
+<h4 id="orgheadline16"><span class="section-number-4">2.5.2</span> An array of <code>GArrays</code></h4>
+<div class="outline-text-4" id="text-2-5-2">
+<p>
+We will store our spike trains in an array of <code>GArrays</code> that we will call, guess it, <code>history</code> (the \(\mathcal{F}_t\) of the article). Let us write a short function <code>malloc_garrays2</code> that allocates the memory required by this array of <code>GArrays</code>. The function takes a single parameter:
+</p>
+<ul class="org-ul">
+<li><b>n_neurons</b> (size_t): the number of neurons in the model, that is, the number of <code>GArrays</code>.</li>
+</ul>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock16">GArray ** malloc_garrays2(size_t n_neurons)
+{
+  GArray **result=malloc(n_neurons*sizeof(GArray*));
+  for (size_t n_idx=0; n_idx &lt; n_neurons; n_idx++)
+    {
+      result[n_idx] = g_array_sized_new(FALSE, FALSE, sizeof(int), 1024);
+    }
+  return result;  
+}
+</pre>
+</div>
+
+<p>
+We write next a function, <code>free_garrays2</code>, that frees the memory taken up by an array of <code>GArrays</code>. The function takes two parameters:
+</p>
+<ul class="org-ul">
+<li><b>history</b> (GArray **).</li>
+<li><b>n_neurons</b> (size_t): the number of neurons.</li>
+</ul>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock17">int free_garrays2(GArray ** history, size_t n_neurons)
+{
+  for (size_t n_idx=0; n_idx &lt; n_neurons; n_idx++)
+    {
+      g_array_free(history[n_idx],TRUE);
+    }
+  free(history);
+  return 0;
+}
+</pre>
+</div>
+
+<p>
+Let us write a short program, <code>garrays2_test.c</code>, that tests that everything goes fine:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock18">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;glib.h&gt;
+
+#define N_NEURONS 10
+
+GArray ** malloc_garrays2(size_t n_neurons);
+
+int free_garrays2(GArray ** history, size_t n_neurons);
+
+int main(void)
+{
+  GArray **history = malloc_garrays2 (N_NEURONS);
+  free_garrays2(history,N_NEURONS);
+  return 0;
+}
+
+&lt;&lt;malloc_garrays2&gt;&gt;
+
+&lt;&lt;free_garrays2&gt;&gt;
+</pre>
+</div>
+
+<p>
+We modify our <code>Makefile</code> to have the right flags for <code>libglib</code>:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-makefile" id="orgsrcblock19">P=programe_name
+OBJECTS=
+CFLAGS += `pkg-config --cflags glib-2.0 gsl` -g -Wall -O3 -std=gnu11 
+LDLIBS = `pkg-config --libs glib-2.0 gsl ` 
+
+$(P): $(OBJECTS)
+</pre>
+</div>
+
+<p>
+Note: the "+" before the equal sign in the <code>CFLAGS</code> specification is there to allow user to add flags later on, I found that on <a href="http://stackoverflow.com/questions/2129391/append-to-gnu-make-variables-via-command-line">stackoverflow</a>.
+</p>
+
+<p>
+The code is then compiled with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock20">make P=garrays2_test
+</pre>
+</div>
+
+<pre class="example">
+cc `pkg-config --cflags glib-2.0` -g -Wall -O3 -std=gnu11 \    
+  garrays2_test.c  `pkg-config --libs glib-2.0 gsl `  -o garrays2_test
+</pre>
+
+<p>
+It is run with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock21">./garrays2_test
+</pre>
+</div>
+
+<p>
+It does not print anything! That's normal, in fact I recompile the file after changing the <code>-O3</code> to <code>-O0</code> in the <code>Makefile</code> and then I run it with <a href="http://valgrind.org/">valgrind</a> to check for memory leaks with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock22">touch garrays2_test.c
+sed -e "s/-O3/-O0/g" &lt; Makefile &gt; Makefile2
+make -f Makefile2 P=garrays2_test
+valgrind --leak-check=yes ./garrays2_test
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline21" class="outline-3">
+<h3 id="orgheadline21"><span class="section-number-3">2.6</span> Fast computation of synaptic leaks</h3>
+<div class="outline-text-3" id="text-2-6">
+<p>
+Our choice of synaptic leak functions above involves the "costly" computation of an exponential at each function evaluation. We will therefore implement a fast approximation of the exponential function proposed by Schraudolph<sup><a id="fnr.4" class="footref" href="#fn.4">4</a></sup>. This implementation involves the definition of two constants and a macro given in the next code bloc (<code>&lt;&lt;Schraudolph-exp&gt;&gt;</code>). In order to be able to recompile quickly our codes with or without this fast exponential implementation we will make its inclusion in the code dependent on existence of the <code>FAST_EXP</code> macro. By default this macro will not exist and the the fast implementation won't be used but if we use <code>-DFAST_EXP</code> upon compilation, the macro will be defined and the fast implementation included. 
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock23">#include &lt;math.h&gt;
+
+#if defined(FAST_EXP)
+static union
+{
+  double d;
+  struct
+  {
+    int j,i;
+  } n;
+} _eco;
+
+#define EXP_A (1048576/M_LN2)
+#define EXP_C 60801
+
+#define EXP(y) (_eco.n.i=EXP_A*(y)+(1072693248-EXP_C),_eco.d)
+#endif
+</pre>
+</div>
+</div>
+
+<div id="outline-container-orgheadline18" class="outline-4">
+<h4 id="orgheadline18"><span class="section-number-4">2.6.1</span> A test</h4>
+<div class="outline-text-4" id="text-2-6-1">
+<p>
+We now write a code that outputs the value of the logistic function (as in figure 1 of Schraudolph's paper) computed with both the usual <code>exp</code> function of the standard math library and with the fast version. We write the output to <code>stdout</code>. The following code is saved in a file called <code>exp_compare.c</code>:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock24">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+#define FAST_EXP
+&lt;&lt;Schraudolph-exp&gt;&gt;
+
+int main()
+{
+  for (size_t i=0; i &lt; 1002; i++)
+    {
+      double x = i*0.01-5;
+      fprintf(stdout,"%7.5g\t%12.10g\t%12.10g\n",x,1/(1+exp(-x)),
+	      1/(1+EXP(-x)));
+    }
+  exit (EXIT_SUCCESS);
+}
+</pre>
+</div>
+
+<p>
+The compilation is done with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock25">gcc -std=gnu11 -g -Wall -o exp_compare exp_compare.c -lm
+</pre>
+</div>
+
+<p>
+We run it and redirect the <code>stdout</code> to a file called exp_compare.txt with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock26">./exp_compare &gt; exp_compare.txt
+</pre>
+</div>
+
+<p>
+We plot the results with <code>gnuplot</code>:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-gnuplot" id="orgsrcblock27">set xlabel "x"
+set ylabel "1/(1+exp(-x))"
+set key top left
+plot "exp_compare.txt" using 1:2 with lines lw 2 lc rgb "black" \
+     title "math exp", \
+     "" using 1:3 with lines lw 2 lc rgb "red" title "macro EXP"
+</pre>
+</div>
+
+
+<div class="figure">
+<p><img src="exp_compare_graph.png" alt="exp_compare_graph.png" />
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline19" class="outline-4">
+<h4 id="orgheadline19"><span class="section-number-4">2.6.2</span> Run time comparison</h4>
+<div class="outline-text-4" id="text-2-6-2">
+<p>
+We now compile twice the (almost) same code drawing 10\(^9\) random numbers with a uniform distribution between -10 and 10 before computing the exponential. One version uses the math <code>exp</code> version and the other uses the <code>EXP</code> macro. The exponential version used is under the control of the <code>FAST_EXP</code> macro, the code is written in a file called <code>many_exp.c</code>:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock28">#include &lt;stdlib.h&gt;
+#include &lt;gsl/gsl_rng.h&gt;
+#include &lt;gsl/gsl_randist.h&gt;
+
+&lt;&lt;Schraudolph-exp&gt;&gt;
+
+#define MIN -10.0
+#define MAX 10.0
+#define NB 1000000000
+
+int main()
+{
+  const gsl_rng_type * T;
+  gsl_rng * r;
+  gsl_rng_env_setup();
+
+  T = gsl_rng_default;
+  r = gsl_rng_alloc (T);
+
+  for (size_t i=0; i&lt;NB; i++)
+    {
+      double u=gsl_ran_flat(r,MIN,MAX);
+#if defined(FAST_EXP)
+      EXP(u);
+#else
+      exp(u);
+#endif
+    }
+  exit (EXIT_SUCCESS);
+}
+</pre>
+</div>
+
+<p>
+We compile without defining the <code>FAST_EXP</code> macro meaning that we use the <code>exp</code> function from the standard <code>math</code> library:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock29">cc -g -Wall -O3 -std=gnu11  many_exp.c  `pkg-config --libs gsl` \
+   -o many_exp_from_math
+</pre>
+</div>
+
+<p>
+We run it and time it with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock30">time ./many_exp_from_math
+</pre>
+</div>
+
+<pre class="example">
+real    0m13.406s
+user    0m13.397s
+sys     0m0.000s
+</pre>
+
+<p>
+Doing the same thing using the <code>EXP</code> from our macro:
+</p>
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock31">cc -g -Wall -O3 -std=gnu11  -DFAST_EXP many_exp.c  `pkg-config --libs gsl`\
+   -o many_exp_from_macro
+</pre>
+</div>
+
+<p>
+We run it and time it with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock32">time ./many_exp_from_macro
+</pre>
+</div>
+
+<pre class="example">
+real    0m12.250s
+user    0m12.230s
+sys     0m0.000s
+</pre>
+
+<p>
+To make a fair estimate of the exponential computation time, we must evaluate the random variate generation time. Writing the following code in a file called <code>rng_generation.c</code>:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock33">#include &lt;stdlib.h&gt;
+#include &lt;gsl/gsl_rng.h&gt;
+#include &lt;gsl/gsl_randist.h&gt;
+
+#define MIN -10.0
+#define MAX 10.0
+#define NB 1000000000
+
+int main()
+{
+  const gsl_rng_type * T;
+  gsl_rng * r;
+  gsl_rng_env_setup();
+
+  T = gsl_rng_default;
+  r = gsl_rng_alloc (T);
+
+  for (size_t i=0; i&lt;NB; i++)
+    {
+      double u=gsl_ran_flat(r,MIN,MAX);
+    }
+  exit (EXIT_SUCCESS);
+}
+</pre>
+</div>
+
+<p>
+We compile with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock34">cc -g -Wall -O3 -std=gnu11  rng_generation.c  `pkg-config --libs gsl`\
+   -o rng_generation
+</pre>
+</div>
+
+<p>
+We run it and time it with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock35">time ./rng_generation
+</pre>
+</div>
+
+<pre class="example">
+real    0m12.333s
+user    0m12.230s
+sys     0m0.010s
+</pre>
+
+<p>
+The 10\(^9\) exponential evaluations take therefore 850 ms with the math <code>exp</code> function and 110 ms with the <code>EXP</code> macro. We have a factor close to 8!
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline20" class="outline-4">
+<h4 id="orgheadline20"><span class="section-number-4">2.6.3</span> Definitions of the synaptic leak functions</h4>
+<div class="outline-text-4" id="text-2-6-3">
+<p>
+Equipped with the <code>EXP</code> macro we can define "efficient" synaptic leak functions starting with <code>g_e</code> that depends on three parameters:
+</p>
+
+<ul class="org-ul">
+<li><b>delay</b> (size_t): the difference between present time and the considered spike time.</li>
+<li><b>tau_e</b> (double): the excitatory time constant.</li>
+<li><b>d_e</b> (size_t): the excitatory delay.</li>
+</ul>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock36">double g_e(size_t delay, double tau_e, size_t d_e)
+{
+  double x = (delay-d_e)/tau_e;
+  if (x &lt; 0 || x &gt; 5)
+    return 0.0;
+  else
+    {
+#if defined(FAST_EXP)
+      return EXP(-x);
+#else
+      return exp(-x);
+#endif      
+    }
+}
+</pre>
+</div>
+
+<p>
+Function <code>g_i</code> also depends on three parameters:
+</p>
+
+<ul class="org-ul">
+<li><b>delay</b> (size_t): the difference between present time and the considered spike time.</li>
+<li><b>tau_i</b> (double): the inhibitory time constant.</li>
+<li><b>d_i</b> (size_t): the inhibitory delay.</li>
+</ul>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock37">double g_i(size_t delay, double tau_i, size_t d_i)
+{
+  double x = (delay-d_i)/tau_i;
+  if (x &lt; 0 || x &gt; 10)
+    return 0.0;
+  else
+    {
+#if defined(FAST_EXP)
+      return x*EXP(1-x);
+#else
+      return x*exp(1-x);
+#endif
+    }
+}
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline27" class="outline-3">
+<h3 id="orgheadline27"><span class="section-number-3">2.7</span> History initialization with the mean-field solution</h3>
+<div class="outline-text-3" id="text-2-7">
+<p>
+The last element we need in order to have a complete simulation code is the part that deals with the initialization our <code>history</code> variable. We are going to use the <a href="https://en.wikipedia.org/wiki/Mean_field_theory">mean field</a> solution (if it exists), that is, the first spike of each neuron will be drawn from an exponential distribution whose (rate) parameter is the mean field rate.
+</p>
+</div>
+
+<div id="outline-container-orgheadline22" class="outline-4">
+<h4 id="orgheadline22"><span class="section-number-4">2.7.1</span> Getting the mean field rate</h4>
+<div class="outline-text-4" id="text-2-7-1">
+<p>
+We are assuming here that our network is homogeneous: the probability of excitatory / inhibitory connection is uniform, the synaptic weights are uniformly distributed, the activation functions, \(\varphi\), are the same for every neuron as well as the synaptic leak (given the connection type). If a mean field solution exists then each neuron has a uniform probability (rate), \(\overline{\nu}\), of spiking at each time step. This \(\overline{\nu}\) must then satisfy the equation: \(\overline{\nu} = \varphi\left(\overline{u}(\overline{\nu})\right)\). Our job now is to find an expression for \(\overline{u}(\overline{\nu})\) that should be a "proper" adaptation equation:
+\[u_{t+1}(i) \doteq \sum_{j \in I} W_{j \rightarrow i} \sum_{s=L_{t+1}^i+1}^t g_j(t+1-s) X_s(j)\, .\]
+We are going to replace \(\sum_{j \in I} W_{j \rightarrow i}\) by the sum of two terms, one for excitatory inputs and an other for the inhibitory ones giving:
+\[\sum_{j \in I} W_{j \rightarrow i} \rightarrow n_{neurons} (p_e \, \overline{w}_e + p_i \, \overline{w}_i) \, ,\]
+where:
+</p>
+<ul class="org-ul">
+<li>\(n_{neurons}\) is the total number of neurons, parameter <code>n_neurons</code> of function <code>mk_graph</code>.</li>
+<li>\(p_e\) is the probability of excitatory connection, parameter <code>p_e</code> of function <code>mk_graph</code>.</li>
+<li>\(\overline{w}_e\) is the mean excitatory synaptic weight, obtained with <code>(w_e_max+w_e_min)/2</code> from the parameters of function <code>mk_graph</code>.</li>
+<li>\(p_i\) is the probability of inhibitory connection, parameter <code>p_i</code> of function <code>mk_graph</code>.</li>
+<li>\(\overline{w}_i\) is the mean inhibitory synaptic weight, obtained with <code>(w_i_max+w_i_min)/2</code> from the parameters of function <code>mk_graph</code>.</li>
+</ul>
+<p>
+We now have to deal with the term \(\sum_{s=L_{t+1}^i+1}^t g_j(t+1-s) X_s(j)\); we do that by considering all the possible occurrence times of the previous spike up to <code>10 x tau_i</code> since beyond this delay the leak functions are all zero:
+</p>
+<ul class="org-ul">
+<li>If the last spike occurred at the previous time step&#x2014;with probability \(\overline{\nu}\) &#x2014;, then the "flushing effect" means that all the previous synaptic inputs got forgotten giving no contribution to \(\overline{u}(\overline{\nu})\).</li>
+<li>If the last spike occurred two time steps ago&#x2014;with probability \(\overline{\nu} \times (1-\overline{\nu})\) &#x2014;, then the "typical" inhibitory input fired in the last time step with probability \(\overline{\nu}\) giving a contribution \(g_i(1)\) to \(\overline{u}(\overline{\nu})\) and the "typical" excitatory input fired  in the last time step with probability \(\overline{\nu}\) giving a contribution \(g_e(1)\) to \(\overline{u}(\overline{\nu})\). The overall contribution is: \(\overline{\nu} \times \left(g_i(1)+g_e(1)\right)\).</li>
+<li>If the last spike occurred three time steps ago&#x2014;with probability \(\overline{\nu} \times (1-\overline{\nu})^2\) &#x2014;, then the "typical" inhibitory input fired in the last time step with probability \(\overline{\nu}\) giving a contribution \(g_i(1)\) and two steps ago, with the same probability, giving a contribution \(g_i(2)\) to \(\overline{u}(\overline{\nu})\); the same reasoning applied to the excitatory input leads to an overall contribution of: \(\overline{\nu} \times \left(g_i(1)+g_e(1)+g_i(2)+g_e(2)\right)\).</li>
+<li>If the last spike occurred \(s\) time steps ago&#x2014; with probability \(\overline{\nu} \times (1-\overline{\nu})^{s-1}\) &#x2014;, we get an overall contribution of: \(\overline{\nu} \times \sum_{j=1}^{s-1}\left(g_i(j)+g_e(j)\right)\).</li>
+</ul>
+<p>
+Our expression for \(\overline{u}(\overline{\nu})\) becomes:
+\[\overline{u}(\overline{\nu}) = n_{neurons} \, \overline{\nu}^2 \times \left(\sum_{s=2}^{\lceil10 \, \tau_i\rceil} (1-\overline{\nu})^{s-1}\, \sum_{j=1}^{s-1}\left(p_i \, \overline{w}_i \, g_i(j) + p_e \, \overline{w}_e \, g_e(j)\right) \right)\, .\]
+</p>
+
+<p>
+We now define a few <code>C</code> functions doing the required computation.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline23" class="outline-4">
+<h4 id="orgheadline23"><span class="section-number-4">2.7.2</span> Utility function definitions</h4>
+<div class="outline-text-4" id="text-2-7-2">
+<p>
+We define <code>G_e</code> that returns a pointer to a <code>gsl_vector</code> whose elements contain the cumulative sum of <code>g_e</code>&#x2014;it takes the same parameters as <code>g_e</code> except the first&#x2014;:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock38">gsl_vector * G_e(double tau_e, size_t d_e)
+{
+  size_t n = ceil(5*tau_e);
+  gsl_vector * res = gsl_vector_alloc(n);
+  gsl_vector_set(res,0,g_e(1,tau_e,d_e));
+  for (size_t i=1; i &lt; n; i++)
+    gsl_vector_set(res,i,gsl_vector_get(res,i-1)+g_e(i+1,tau_e,d_e));
+  return res;
+}
+</pre>
+</div>
+
+<p>
+The use of this function requires directive <code>#include &lt;gsl/gsl_vector.h&gt;</code> as well as directive <code>#include &lt;math.h&gt;</code>. We now define <code>G_i</code> that returns a pointer to a <code>gsl_vector</code> whose elements contain the cumulative sum of <code>g_i</code>&#x2014;it takes the same parameters as <code>g_i</code> except the first&#x2014;:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock39">gsl_vector * G_i(double tau_i, size_t d_i)
+{
+  size_t n = ceil(10*tau_i);
+  gsl_vector * res = gsl_vector_alloc(n);
+  gsl_vector_set(res,0,g_i(1,tau_i,d_i));
+  for (size_t i=1; i &lt; n; i++)
+    gsl_vector_set(res,i,gsl_vector_get(res,i-1)+g_i(i+1,tau_i,d_i));
+  return res;
+}
+</pre>
+</div>
+
+<p>
+The use of this function requires the same directives as <code>G_e</code>.
+</p>
+
+<p>
+We define <code>u_at_nu</code> that returns \(\overline{u}(\overline{\nu})\) and take the following parameters:
+</p>
+<ul class="org-ul">
+<li><b>nu_bar</b> (double): the value of \(\overline{\nu}\).</li>
+<li><b>n_neurons</b> (size_t): the number of neurons.</li>
+<li><b>p_e</b> (double): the probability of excitatory connection.</li>
+<li><b>w_e_min</b> (double): the minimal excitatory weight.</li>
+<li><b>w_e_max</b> (double): the maximal excitatory weight.</li>
+<li><b>G_e</b> (gsl_vector *): the output of <code>G_e</code>.</li>
+<li><b>p_i</b> (double): the probability of inhibitory connection.</li>
+<li><b>w_i_min</b> (double): the minimal inhibitory weight.</li>
+<li><b>w_i_max</b> (double): the maximal inhibitory weight.</li>
+<li><b>G_i</b> (gsl_vector *): the output of <code>G_i</code>.</li>
+</ul>
+<p>
+The function returns a double.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock40">double u_at_nu(double nu_bar, size_t n_neurons,
+	       double p_e, double w_e_min, double w_e_max,
+	       gsl_vector * G_e,
+	       double p_i, double w_i_min, double w_i_max,
+	       gsl_vector * G_i)
+{
+  size_t max = G_i-&gt;size;
+  double u = 0;
+  double e_factor = p_e*(w_e_min+w_e_max)*0.5;
+  double i_factor = p_i*(w_i_min+w_i_max)*0.5;
+  for (size_t s=2; s &lt;= max; s++)
+    {
+      double Ge;
+      if (s-1 &lt; G_e-&gt;size)
+	Ge = gsl_vector_get(G_e,s-1);
+      else
+	Ge = gsl_vector_get(G_e,G_e-&gt;size-1);
+      double Gi = gsl_vector_get(G_i,s-1);
+      u += pow((1-nu_bar),(double) (s-1))*(Ge*e_factor+Gi*i_factor);
+    }
+  return u*n_neurons*nu_bar*nu_bar;
+}
+</pre>
+</div>
+
+<p>
+The use of this functions requires directive <code>#include &lt;gsl/gsl_vector.h&gt;</code> as well as directive <code>#include &lt;math.h&gt;</code>.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline24" class="outline-4">
+<h4 id="orgheadline24"><span class="section-number-4">2.7.3</span> A program returning \(\varphi(\overline{\nu})\)</h4>
+<div class="outline-text-4" id="text-2-7-3">
+<p>
+We now write a program <code>mean_field</code> returning a sequence of \(\left(\overline{\nu},\overline{u}(\overline{\nu}),\varphi(\overline{\nu})\right)\) values. The parameters taken by the program are spelled out in the following <code>&lt;&lt;print_usage_mean_field&gt;&gt;</code> function:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock41">void print_usage_mean_field() {
+  printf("Usage: \n"
+	 "  --n_neurons &lt;positive integer&gt;: the number of neurons in the"
+	 " network\n"
+	 "  --p_e &lt;double in (0,1)&gt;: the probability of excitatory "
+	 "connection between two neurons\n"
+	 "  --w_e_min &lt;positive double&gt;: the minimal excitatory synaptic "
+	 "weight\n"
+	 "  --w_e_min &lt;positive double&gt;: the maximal excitatory synaptic "
+	 "weight\n"
+	 "  --tau_e &lt;positive double&gt;: the time constant of excitatory "
+	 "leak functions\n"
+	 "  --d_e &lt;positive integer&gt;: the excitatory synaptic delay\n"
+	 "  --p_i &lt;double in (0,1)&gt;: the probability of inhibitory "
+	 "connection between two neurons\n"
+	 "  --w_i_min &lt;negative double&gt;: the minimal inhibitory synaptic "
+	 "weight\n"
+	 "  --w_i_max &lt;negative double&gt;: the maximal inhibitory synaptic "
+	 "weight\n"
+	 "  --tau_i &lt;positive double&gt;: the time constant of inhibitory "
+	 "leak functions\n"
+	 "  --d_i &lt;positive integer&gt;: the inhibitory synaptic delay\n"
+	 "  --varphi_0 &lt;double in (0,1)&gt;: the basal value of the "
+	 "activation function\n"
+	 "  --varphi_k &lt;positive double&gt;: constant controlling the "
+	 "steepness of the activation function\n"
+	 "  --n_steps &lt;positive integer&gt;: the number of nu_bar values "
+	 "to explore between varphi_0 and 1\n"
+	 "\n");
+}
+</pre>
+</div>
+
+<p>
+We now write the <code>&lt;&lt;read_par_mean_field&gt;&gt;</code> code:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock42">int read_par_mean_field(int argc, char ** argv,
+			size_t * n_neurons,
+			double * p_e, double * w_e_min, double * w_e_max,
+			double * tau_e, size_t * d_e,
+			double * p_i, double * w_i_min, double * w_i_max,
+			double * tau_i, size_t * d_i,
+			double * varphi_0, double * varphi_k,
+			size_t * n_steps)
+{
+  if (argc == 1) {
+    print_usage_mean_field();
+    return -1;
+  }
+  // Define default values
+  *p_e = 0.1;
+  *w_e_min = 2;
+  *w_e_max = 4;
+  *tau_e = 5;
+  *d_e = 1;
+  *p_i = 0.2;
+  *w_i_min = -0.01;
+  *w_i_max = -0.005;
+  *tau_i = 5;
+  *d_i = 5;
+  *varphi_0=0.01;
+  *varphi_k = 10;
+  *n_steps = 1001;
+  {int opt;
+    static struct option long_options[] = {
+      {"n_neurons",required_argument,NULL,'n'},
+      {"p_e",optional_argument,NULL,'a'},
+      {"w_e_min",optional_argument,NULL,'b'},
+      {"w_e_max",optional_argument,NULL,'c'},
+      {"p_i",optional_argument,NULL,'d'},
+      {"w_i_min",optional_argument,NULL,'e'},
+      {"w_i_max",optional_argument,NULL,'f'},
+      {"help",no_argument,NULL,'h'},
+      {"tau_e",optional_argument,NULL,'i'},
+      {"d_e",optional_argument,NULL,'j'},
+      {"tau_i",optional_argument,NULL,'k'},
+      {"d_i",optional_argument,NULL,'l'},
+      {"varphi_0",optional_argument,NULL,'m'},
+      {"varphi_k",optional_argument,NULL,'g'},
+      {"n_steps",optional_argument,NULL,'o'},
+      {NULL,0,NULL,0}
+    };
+    int long_index =0;
+    while ((opt = getopt_long(argc,argv,"hn:a:b:c:d:e:f:g:i:j:k:l:m:o:",
+			      long_options,&amp;long_index)) != -1) {
+      switch(opt) {
+      case 'n':
+	{
+	  int n=atoi(optarg);
+	  if (n &lt;= 0)
+	    {
+	      fprintf(stderr,"The number of neurons should be &gt; 0.\n");
+	      return -1;
+	    }
+	  *n_neurons=(size_t) n; 
+	}
+	break;
+      case 'a': *p_e=atof(optarg);
+	break;
+      case 'b': *w_e_min=atof(optarg);
+	break;
+      case 'c': *w_e_max=atof(optarg);
+	break;
+      case 'd': *p_i=atof(optarg);
+	break;
+      case 'e': *w_i_min=atof(optarg);
+	break;
+      case 'f': *w_i_max=atof(optarg);
+	break;
+      case 'i': *tau_e=atof(optarg);
+	break;
+      case 'j':
+	{
+	  int n=atoi(optarg);
+	  if (n &lt;= 0)
+	    {
+	      fprintf(stderr,"The excitatory synaptic delay should be &gt; 0.\n");
+	      return -1;
+	    }
+	  *d_e=(size_t) n; 
+	}
+	break;
+      case 'k': *tau_i=atof(optarg);
+	break;
+      case 'l':
+	{
+	  int n=atoi(optarg);
+	  if (n &lt;= 0)
+	    {
+	      fprintf(stderr,"The inhibitory synaptic delay should be &gt; 0.\n");
+	      return -1;
+	    }
+	  *d_i=(size_t) n; 
+	}
+	break;
+      case 'm': *varphi_0=atof(optarg);
+	break;
+      case 'g': *varphi_k=atof(optarg);
+	break;
+      case 'o':
+	{
+	  int n=atoi(optarg);
+	  if (n &lt;= 0)
+	    {
+	      fprintf(stderr,"The number of nu_bar steps should be &gt; 0.\n");
+	      return -1;
+	    }
+	  *n_steps=(size_t) n; 
+	}
+	break;
+      case 'h': print_usage_mean_field();
+	return -1;
+      default : print_usage_mean_field();
+	return -1;
+      }
+    }
+  }
+  // Check that the parameters are correct
+  if (*p_e &lt; 0 || *p_e &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= p_e &lt;= 1.\n");
+      return -1;
+    }
+  if (*p_i &lt; 0 || *p_i &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= p_i &lt;= 1.\n");
+      return -1;
+    }
+  if (*w_e_min &lt;= 0 || *w_e_max &lt;= 0)
+    {
+      fprintf(stderr,"Excitatory weights must be &gt; 0.\n");
+      return -1;
+    }
+  if (*w_e_min &gt;= *w_e_max)
+    {
+      fprintf(stderr,"We must have w_e_min &lt; w_e_max.\n");
+      return -1;
+    }
+  if (*w_i_min &gt;= 0 || *w_i_max &gt;= 0)
+    {
+      fprintf(stderr,"Inhibitory weights must be &lt; 0.\n");
+      return -1;
+    }
+  if (*w_i_min &gt;= *w_i_max)
+    {
+      fprintf(stderr,"We must have w_i_min &lt; w_i_max.\n");
+      return -1;
+    }
+  if (*tau_i &lt; 0)
+    {
+      fprintf(stderr,"We must have 0 &lt;= tau_i.\n");
+      return -1;
+    }
+  if (*tau_e &lt; 0)
+    {
+      fprintf(stderr,"We must have 0 &lt;= tau_e.\n");
+      return -1;
+    }
+  if (*varphi_0 &lt; 0 || *varphi_0 &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= varphi_0 &lt;= 1.\n");
+      return -1;
+    }
+  if (*varphi_k &lt;= 0)
+    {
+      fprintf(stderr,"We must have 0 &lt; varphi_k.\n");
+      return -1;
+    }
+  return 0;
+}
+</pre>
+</div>
+
+<p>
+Our <code>mean_field</code> program is going to write its results to the <code>stdout</code> with a preamble (lines starting with a <code>#</code> interpreted as comments by <code>gnuplot</code>) containing the value of the parameters used. The function writing the preamble, <code>write_mean_field_preamble</code> is defined next:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock43">int write_mean_field_preamble(size_t * n_neurons,
+			      double * p_e, double * w_e_min,
+			      double * w_e_max,
+			      double * tau_e, size_t * d_e,
+			      double * p_i, double * w_i_min,
+			      double * w_i_max,
+			      double * tau_i, size_t * d_i,
+			      double * varphi_0, double * varphi_k,
+			      size_t * n_steps)
+{
+  fprintf(stdout,"###########################################\n"
+	  "# Parameters used when running the program\n");
+  fprintf(stdout,"# The number of neurons is: %d\n", (int) * n_neurons);
+  fprintf(stdout,"# Probability of excitatory connection: %g\n", * p_e);
+  fprintf(stdout,"# Minimal excitatory weight: %g\n", * w_e_min);
+  fprintf(stdout,"# Maximal excitatory weight: %g\n", * w_e_max);
+  fprintf(stdout,"# Excitatory time constant: %g\n", * tau_e);
+  fprintf(stdout,"# Excitatory time delay: %d\n", (int) * d_e);
+  fprintf(stdout,"# Probability of inhibitory connection: %g\n", * p_i);
+  fprintf(stdout,"# Minimal inhibitory weight: %g\n", * w_i_min);
+  fprintf(stdout,"# Maximal inhibitory weight: %g\n", * w_i_max);
+  fprintf(stdout,"# Inhibitory time constant: %g\n", * tau_i);
+  fprintf(stdout,"# Inhibitory time delay: %d\n", (int) * d_i);
+  fprintf(stdout,"# varphi_0: %g\n", * varphi_0);
+  fprintf(stdout,"# varphi_k: %g\n", * varphi_k);
+  fprintf(stdout,"# Number of steps: %d\n", (int) * n_steps);
+  fprintf(stdout,"###########################################\n");
+  return 0;
+}
+</pre>
+</div>
+
+<p>
+The program written to file <code>mean_field.c</code> is then:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock44">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;getopt.h&gt;
+#include &lt;gsl/gsl_math.h&gt;
+#include &lt;gsl/gsl_vector.h&gt;
+
+&lt;&lt;Schraudolph-exp&gt;&gt;
+
+int read_par_mean_field(int argc, char ** argv,
+			size_t * n_neurons,
+			double * p_e, double * w_e_min,
+			double * w_e_max,
+			double * tau_e, size_t * d_e,
+			double * p_i, double * w_i_min,
+			double * w_i_max,
+			double * tau_i, size_t * d_i,
+			double * varphi_0, double * varphi_k,
+			size_t * n_steps);
+
+void print_usage_mean_field();
+
+int write_mean_field_preamble(size_t * n_neurons,
+			      double * p_e, double * w_e_min,
+			      double * w_e_max,
+			      double * tau_e, size_t * d_e,
+			      double * p_i, double * w_i_min,
+			      double * w_i_max,
+			      double * tau_i, size_t * d_i,
+			      double * varphi_0, double * varphi_k,
+			      size_t * n_steps);
+
+double u_at_nu(double nu_bar, size_t n_neurons,
+	       double p_e, double w_e_min, double w_e_max,
+	       gsl_vector * G_e,
+	       double p_i, double w_i_min, double w_i_max,
+	       gsl_vector * G_i);
+
+gsl_vector * G_i(double tau_i, size_t d_i);
+
+gsl_vector * G_e(double tau_e, size_t d_e);
+
+double varphi(double u, double varphi_0, double k);
+
+double g_i(size_t delay, double tau_i, size_t d_i);
+
+double g_e(size_t delay, double tau_e, size_t d_e);
+
+int main(int argc, char ** argv)
+{
+  size_t n_neurons, d_e, d_i, n_steps;
+  double p_e, w_e_min, w_e_max, tau_e;
+  double p_i, w_i_min, w_i_max, tau_i;
+  double varphi_0, varphi_k;
+  int status = read_par_mean_field(argc, argv, &amp;n_neurons,
+				   &amp;p_e, &amp;w_e_min, &amp;w_e_max,
+				   &amp;tau_e, &amp;d_e,
+				   &amp;p_i, &amp;w_i_min, &amp;w_i_max,
+				   &amp;tau_i, &amp;d_i,
+				   &amp;varphi_0, &amp;varphi_k, &amp;n_steps);
+
+  if (status == -1) exit (EXIT_FAILURE);
+
+  write_mean_field_preamble(&amp;n_neurons, &amp;p_e, &amp;w_e_min, &amp;w_e_max,
+			    &amp;tau_e, &amp;d_e, &amp;p_i, &amp;w_i_min, &amp;w_i_max,
+			    &amp;tau_i, &amp;d_i, &amp;varphi_0, &amp;varphi_k,
+			    &amp;n_steps);
+  gsl_vector * Ig_e;
+  Ig_e = G_e(tau_e, d_e);
+  gsl_vector * Ig_i;
+  Ig_i = G_i(tau_i, d_i);
+  double step = (1-varphi_0)/(n_steps-1);
+  for (size_t i=0; i&lt;n_steps; i++)
+    {
+      double t = varphi_0+i*step;
+      double u = u_at_nu(t, n_neurons,
+			 p_e, w_e_min, w_e_max, Ig_e,
+			 p_i, w_i_min, w_i_max, Ig_i);
+      double varphi_val = varphi(u,varphi_0,varphi_k);
+      fprintf(stdout,"%12.10g\t%12.10g\t%12.10g\n",
+	      t,u,varphi_val);
+    }
+
+  gsl_vector_free(Ig_e);
+  gsl_vector_free(Ig_i);
+  exit (EXIT_SUCCESS);
+}
+
+&lt;&lt;read_par_mean_field&gt;&gt;
+
+&lt;&lt;print_usage_mean_field&gt;&gt;
+
+&lt;&lt;write_mean_field_preamble&gt;&gt;
+
+&lt;&lt;u_at_nu&gt;&gt;
+
+&lt;&lt;G_i&gt;&gt;
+
+&lt;&lt;G_e&gt;&gt;
+
+&lt;&lt;g_i&gt;&gt;
+
+&lt;&lt;g_e&gt;&gt;
+
+&lt;&lt;varphi&gt;&gt;
+</pre>
+</div>
+
+<p>
+The compilation is then done with the command:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock45">make P=mean_field
+</pre>
+</div>
+
+<pre class="example">
+cc -g -Wall -O3 -std=gnu11    mean_field.c  `pkg-config --libs gsl`  -o mean_field
+</pre>
+
+<p>
+A first test is done with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock46">./mean_field --n_neurons=800 --tau_i=5 --d_i=4 \
+	     --p_i=0.25 --tau_e=5 --w_e_min=0.2 \
+	     --w_e_max=0.3 --d_e=1 --p_e=0.1 \
+	     --w_i_min=-0.02 --w_i_max=-0.005 \
+	     --varphi_0=0.01 --varphi_k=17 \
+	     --n_steps=1001 &gt; mean_field_test1.txt
+</pre>
+</div>
+
+<p>
+We plot the results with <code>gnuplot</code>:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-gnuplot" id="orgsrcblock47">set xlabel "{/OpenSymbol ν}"
+set ylabel "{/OpenSymbol φ(ν)}"
+set key top left
+set grid
+plot [0:0.3] [0:0.3] "mean_field_test1.txt" using 1:3 with lines lw 2\
+     lc rgb "red" title "{/OpenSymbol φ(ν)}", \
+     "" using 1:1 with lines lw 2 lc rgb "black" \
+     title "{/OpenSymbol ν}"
+</pre>
+</div>
+
+
+<div class="figure">
+<p><img src="mean_field_1.png" alt="mean_field_1.png" />
+</p>
+</div>
+
+<p>
+There seem to be two stable fixed-points one close to close 0 the other one close to 0.23, if it's not wrong it's interesting since the presence of two stable fixed-points is the allmark of working memory models at the network level.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline25" class="outline-4">
+<h4 id="orgheadline25"><span class="section-number-4">2.7.4</span> Getting a numerical estimation of the fixed point values</h4>
+<div class="outline-text-4" id="text-2-7-4">
+<p>
+We want now to write a program returning a numerical value for a fixed point. To that end we are going to use the <a href="https://www.gnu.org/software/gsl/manual/html_node/One-dimensional-Root_002dFinding.html#One-dimensional-Root_002dFinding">one dimensional root-finding</a> routines of the <code>gsl</code>. We want to find the root of: \(\varphi(\overline{\nu})-\overline{\nu}\) while still being able to work with different parameters like <code>varphi_0</code>, <code>p_e</code>, etc. The <code>gsl</code> then requires that we separate the parameters of the function whose root(s) we look for into two parts: 
+</p>
+<ul class="org-ul">
+<li>The variable \(\overline{\nu}\) above.</li>
+<li>All the other parameters:
+<ul class="org-ul">
+<li><code>n_neurons</code>, <code>d_e</code>, <code>d_i</code> (<code>size_t</code>);</li>
+<li><code>p_e</code>, <code>w_e_min</code>, <code>w_e_max</code>, <code>p_i</code>, <code>w_i_min</code>, <code>w_i_max</code>, <code>varphi_0</code>, <code>varphi_k</code>;</li>
+<li><code>G_e</code>, <code>G_i</code> (<code>gsl_vector *</code>).</li>
+</ul></li>
+</ul>
+
+<p>
+To that end, following <a href="https://www.gnu.org/software/gsl/manual/html_node/Root-Finding-Examples.html#Root-Finding-Examples">the example</a> of the <code>gsl</code> manual we define a structure with one member for each parameter as well as the signature of the "target function". We do that in <code>&lt;&lt;mean_field_fixed_point_header&gt;&gt;</code> given next:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock48">typedef struct
+{
+  size_t n_neurons, d_e, d_i;
+  double p_e, w_e_min, w_e_max, p_i, w_i_min, w_i_max, varphi_0, \
+    varphi_k, tau_e, tau_i;
+  gsl_vector * G_e;
+  gsl_vector * G_i;
+} mean_field_fixed_point_params;
+
+double mf_fixed_point_target(double nu, void *params);
+</pre>
+</div>
+
+<p>
+We define next the <code>mf_fixed_point_target</code> function whose root we want to find with respect to parameter <code>nu</code>:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock49">double mf_fixed_point_target(double nu, void *params)
+{
+  mean_field_fixed_point_params *p = \
+    (mean_field_fixed_point_params *) params;
+  size_t n_neurons = p-&gt;n_neurons;
+  double p_e = p-&gt;p_e;
+  double w_e_min = p-&gt;w_e_min;
+  double w_e_max = p-&gt;w_e_max;
+  double p_i = p-&gt;p_i;
+  double w_i_min = p-&gt;w_i_min;
+  double w_i_max = p-&gt;w_i_max;
+  double varphi_0 = p-&gt;varphi_0;
+  double varphi_k = p-&gt;varphi_k;
+  gsl_vector * G_e = p-&gt;G_e;
+  gsl_vector * G_i = p-&gt;G_i;
+
+  double u = u_at_nu(nu, n_neurons, p_e, w_e_min, w_e_max, G_e,
+		     p_i, w_i_min, w_i_max, G_i);
+  return varphi(u,varphi_0,varphi_k)-nu;
+}
+</pre>
+</div>
+
+<p>
+Now, the root-finding functions require that the user provides a bracketing interval containing (in principle) one and only one root. We therefore have to adapt our parameter reading functions accordingly as follows:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock50">void print_usage_mean_field_fixed_point() {
+  printf("Usage: \n"
+	 "  --n_neurons &lt;positive integer&gt;: the number of neurons in "
+	 "the network\n"
+	 "  --p_e &lt;double in (0,1)&gt;: the probability of excitatory "
+	 "connection between two neurons\n"
+	 "  --w_e_min &lt;positive double&gt;: the minimal excitatory "
+	 "synaptic weight\n"
+	 "  --w_e_min &lt;positive double&gt;: the maximal excitatory "
+	 "synaptic weight\n"
+	 "  --tau_e &lt;positive double&gt;: the time constant of "
+	 "excitatory leak functions\n"
+	 "  --d_e &lt;positive integer&gt;: the excitatory synaptic delay\n"
+	 "  --p_i &lt;double in (0,1)&gt;: the probability of inhibitory "
+	 "connection between two neurons\n"
+	 "  --w_i_min &lt;negative double&gt;: the minimal inhibitory "
+	 "synaptic weight\n"
+	 "  --w_i_max &lt;negative double&gt;: the maximal inhibitory "
+	 "synaptic weight\n"
+	 "  --tau_i &lt;positive double&gt;: the time constant of "
+	 "inhibitory leak functions\n"
+	 "  --d_i &lt;positive integer&gt;: the inhibitory synaptic delay\n"
+	 "  --varphi_0 &lt;double in (0,1)&gt;: the basal value of the "
+	 "activation function\n"
+	 "  --varphi_k &lt;positive double&gt;: constant controlling the "
+	 "steepness of the activation function\n"
+	 "  --nu_lower &lt;double in (0,1)&gt;: the left end of the root "
+	 "bracketing interval\n"
+	 "  --nu_upper &lt;double in (0,1)&gt;: the right end of the root "
+	 "bracketing interval\n"
+	 "\n");
+}
+</pre>
+</div>
+
+<p>
+We now write the <code>&lt;&lt;read_par_mean_field_fixed_point&gt;&gt;</code> code:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock51">int read_par_mean_field_fixed_point(int argc, char ** argv,
+				    mean_field_fixed_point_params *p,
+				    double * nu_lower,
+				    double * nu_upper)
+{
+  // Define default values
+  
+  p-&gt;n_neurons = 800;
+  p-&gt;p_e = 0.1;
+  p-&gt;w_e_min = 0.5;
+  p-&gt;w_e_max = 1;
+  p-&gt;tau_e = 5;
+  p-&gt;d_e = 1;
+  p-&gt;p_i = 0.2;
+  p-&gt;w_i_min = -0.004;
+  p-&gt;w_i_max = -0.002;
+  p-&gt;tau_i = 5;
+  p-&gt;d_i = 4;
+  p-&gt;varphi_0 = 0.01;
+  p-&gt;varphi_k = 15;
+  *nu_lower = 0.25;
+  *nu_upper = 0.3;
+  {int opt;
+    static struct option long_options[] = {
+      {"n_neurons",optional_argument,NULL,'n'},
+      {"p_e",optional_argument,NULL,'a'},
+      {"w_e_min",optional_argument,NULL,'b'},
+      {"w_e_max",optional_argument,NULL,'c'},
+      {"p_i",optional_argument,NULL,'d'},
+      {"w_i_min",optional_argument,NULL,'e'},
+      {"w_i_max",optional_argument,NULL,'f'},
+      {"help",no_argument,NULL,'h'},
+      {"tau_e",optional_argument,NULL,'i'},
+      {"d_e",optional_argument,NULL,'j'},
+      {"tau_i",optional_argument,NULL,'k'},
+      {"d_i",optional_argument,NULL,'l'},
+      {"varphi_0",optional_argument,NULL,'m'},
+      {"varphi_k",optional_argument,NULL,'g'},
+      {"nu_lower",optional_argument,NULL,'o'},
+      {"nu_upper",optional_argument,NULL,'p'},
+      {NULL,0,NULL,0}
+    };
+    int long_index =0;
+    while ((opt = getopt_long(argc,argv,
+			      "hn:a:b:c:d:e:f:g:i:j:k:l:m:o:p:",
+			      long_options,&amp;long_index)) != -1) {
+      switch(opt) {
+      case 'n':
+	{
+	  int n=atoi(optarg);
+	  if (n &lt;= 0)
+	    {
+	      fprintf(stderr,"The number of neurons should be &gt; 0.\n");
+	      return -1;
+	    }
+	  p-&gt;n_neurons=(size_t) n; 
+	}
+	break;
+      case 'a': p-&gt;p_e=atof(optarg);
+	break;
+      case 'b': p-&gt;w_e_min=atof(optarg);
+	break;
+      case 'c': p-&gt;w_e_max=atof(optarg);
+	break;
+      case 'd': p-&gt;p_i=atof(optarg);
+	break;
+      case 'e': p-&gt;w_i_min=atof(optarg);
+	break;
+      case 'f': p-&gt;w_i_max=atof(optarg);
+	break;
+      case 'i': p-&gt;tau_e=atof(optarg);
+	break;
+      case 'j':
+	{
+	  int n=atoi(optarg);
+	  if (n &lt;= 0)
+	    {
+	      fprintf(stderr,"The excitatory synaptic delay should "
+		      "be &gt; 0.\n");
+	      return -1;
+	    }
+	  p-&gt;d_e=(size_t) n; 
+	}
+	break;
+      case 'k': p-&gt;tau_i=atof(optarg);
+	break;
+      case 'l':
+	{
+	  int n=atoi(optarg);
+	  if (n &lt;= 0)
+	    {
+	      fprintf(stderr,"The inhibitory synaptic delay should "
+		      "be &gt; 0.\n");
+	      return -1;
+	    }
+	  p-&gt;d_i=(size_t) n; 
+	}
+	break;
+      case 'm': p-&gt;varphi_0=atof(optarg);
+	break;
+      case 'g': p-&gt;varphi_k=atof(optarg);
+	break;
+      case 'o': *nu_lower=atof(optarg);
+	break;
+      case 'p': *nu_upper=atof(optarg);
+	break;
+      case 'h': print_usage_mean_field_fixed_point();
+	return -1;
+      default : print_usage_mean_field_fixed_point();
+	return -1;
+      }
+    }
+  }
+  // Check that the parameters are correct
+  if (p-&gt;p_e &lt; 0 || p-&gt;p_e &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= p_e &lt;= 1.\n");
+      return -1;
+    }
+  if (p-&gt;p_i &lt; 0 || p-&gt;p_i &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= p_i &lt;= 1.\n");
+      return -1;
+    }
+  if (p-&gt;w_e_min &lt;= 0 || p-&gt;w_e_max &lt;= 0)
+    {
+      fprintf(stderr,"Excitatory weights must be &gt; 0.\n");
+      return -1;
+    }
+  if (p-&gt;w_e_min &gt;= p-&gt;w_e_max)
+    {
+      fprintf(stderr,"We must have w_e_min &lt; w_e_max.\n");
+      return -1;
+    }
+  if (p-&gt;w_i_min &gt;= 0 || p-&gt;w_i_max &gt;= 0)
+    {
+      fprintf(stderr,"Inhibitory weights must be &lt; 0.\n");
+      return -1;
+    }
+  if (p-&gt;w_i_min &gt;= p-&gt;w_i_max)
+    {
+      fprintf(stderr,"We must have w_i_min &lt; w_i_max.\n");
+      return -1;
+    }
+  if (p-&gt;tau_i &lt; 0)
+    {
+      fprintf(stderr,"We must have 0 &lt;= tau_i.\n");
+      return -1;
+    }
+  if (p-&gt;tau_e &lt; 0)
+    {
+      fprintf(stderr,"We must have 0 &lt;= tau_e.\n");
+      return -1;
+    }
+  if (p-&gt;varphi_0 &lt; 0 || p-&gt;varphi_0 &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= varphi_0 &lt;= 1.\n");
+      return -1;
+    }
+  if (p-&gt;varphi_k &lt;= 0)
+    {
+      fprintf(stderr,"We must have 0 &lt; varphi_k.\n");
+      return -1;
+    }
+  if (*nu_lower &lt; 0 || *nu_lower &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= nu_lower &lt;= 1.\n");
+      return -1;
+    }
+  if (*nu_upper &lt; 0 || *nu_upper &gt; 1 || *nu_upper &lt;= *nu_lower)
+    {
+      fprintf(stderr,"We must have 0 &lt;= nu_lower &lt; nu_lower &lt;= 1.\n");
+      return -1;
+    }
+  return 0;
+}
+</pre>
+</div>
+
+<p>
+Our <code>mean_field_fixed_point</code> program is going to write its results to the <code>stdout</code>. The program written to file <code>mean_field_fixed_point.c</code> is then:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock52">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;getopt.h&gt;
+#include &lt;gsl/gsl_errno.h&gt;
+#include &lt;gsl/gsl_math.h&gt;
+#include &lt;gsl/gsl_vector.h&gt;
+#include &lt;gsl/gsl_roots.h&gt;
+
+&lt;&lt;Schraudolph-exp&gt;&gt;
+
+&lt;&lt;mean_field_fixed_point_header&gt;&gt;
+
+int read_par_mean_field_fixed_point(int argc, char ** argv,
+				    mean_field_fixed_point_params *p,
+				    double * nu_lower,
+				    double * nu_upper);
+
+void print_usage_mean_field_fixed_point();
+
+
+double u_at_nu(double nu_bar, size_t n_neurons,
+	       double p_e, double w_e_min, double w_e_max,
+	       gsl_vector * G_e,
+	       double p_i, double w_i_min, double w_i_max,
+	       gsl_vector * G_i);
+
+gsl_vector * G_i(double tau_i, size_t d_i);
+
+gsl_vector * G_e(double tau_e, size_t d_e);
+
+double varphi(double u, double varphi_0, double k);
+
+double g_i(size_t delay, double tau_i, size_t d_i);
+
+double g_e(size_t delay, double tau_e, size_t d_e);
+
+double mf_fixed_point_target(double nu, void *params);
+
+int main(int argc, char ** argv)
+{
+  mean_field_fixed_point_params params;
+  double nu_lower, nu_upper;
+  int status = read_par_mean_field_fixed_point(argc, argv, &amp;params,
+					       &amp;nu_lower, &amp;nu_upper);
+
+  if (status == -1) exit (EXIT_FAILURE);
+  
+  params.G_e = G_e(params.tau_e, params.d_e);
+  params.G_i = G_i(params.tau_i, params.d_i);
+
+  int iter = 0, max_iter = 100;
+  const gsl_root_fsolver_type *T;
+  gsl_root_fsolver *s;
+  gsl_function F;
+  F.function = &amp;mf_fixed_point_target;
+  F.params = &amp;params;
+
+  T = gsl_root_fsolver_brent;
+  s = gsl_root_fsolver_alloc (T);
+  gsl_root_fsolver_set (s, &amp;F, nu_lower, nu_upper);
+  printf ("using %s method\n",
+	  gsl_root_fsolver_name (s));
+
+  printf ("%5s [%9s, %9s] %9s %9s\n",
+	  "iter", "lower", "upper", "root",
+	  "err(est)");
+
+  do
+    {
+      iter++;
+      status = gsl_root_fsolver_iterate (s);
+      double r = gsl_root_fsolver_root (s);
+      nu_lower = gsl_root_fsolver_x_lower (s);
+      nu_upper = gsl_root_fsolver_x_upper (s);
+      status = gsl_root_test_interval (nu_lower, nu_upper,
+				       0, 0.001);
+
+      if (status == GSL_SUCCESS)
+	printf ("Converged:\n");
+
+      printf ("%5d [%.7f, %.7f] %.7f %.7f\n",
+	      iter, nu_lower, nu_upper,
+	      r, nu_upper - nu_lower);
+    }
+  while (status == GSL_CONTINUE &amp;&amp; iter &lt; max_iter);
+
+  gsl_root_fsolver_free (s);
+  gsl_vector_free(params.G_e);
+  gsl_vector_free(params.G_i);
+  return status;
+}
+
+&lt;&lt;read_par_mean_field_fixed_point&gt;&gt;
+
+&lt;&lt;print_usage_mean_field_fixed_point&gt;&gt;
+
+&lt;&lt;u_at_nu&gt;&gt;
+
+&lt;&lt;G_i&gt;&gt;
+
+&lt;&lt;G_e&gt;&gt;
+
+&lt;&lt;g_i&gt;&gt;
+
+&lt;&lt;g_e&gt;&gt;
+
+&lt;&lt;varphi&gt;&gt;
+
+&lt;&lt;mf_fixed_point_target&gt;&gt;
+</pre>
+</div>
+
+<p>
+We compile with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock53">make P=mean_field_fixed_point
+</pre>
+</div>
+
+<p>
+We run it with the parameters previously used:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock54">./mean_field_fixed_point --n_neurons=800 --tau_i=5 --d_i=4  \
+			 --p_i=0.25 --tau_e=5 --w_e_min=0.2 \
+			 --w_e_max=0.3 --d_e=1 --p_e=0.1  \
+			 --w_i_min=-0.02 --w_i_max=-0.005 \
+			 --varphi_0=0.01 --varphi_k=17 \
+			 --nu_lower=0.2 --nu_upper=0.3
+</pre>
+</div>
+
+<pre class="example">
+using brent method
+ iter [    lower,     upper]      root  err(est)
+    1 [0.2136329, 0.3000000] 0.2136329 0.0863671
+    2 [0.2136329, 0.2225940] 0.2225940 0.0089611
+    3 [0.2216011, 0.2225940] 0.2216011 0.0009929
+    4 [0.2216547, 0.2225940] 0.2216547 0.0009393
+Converged:
+    5 [0.2216547, 0.2216550] 0.2216550 0.0000003
+</pre>
+</div>
+</div>
+<div id="outline-container-orgheadline26" class="outline-4">
+<h4 id="orgheadline26"><span class="section-number-4">2.7.5</span> Actual initialization strategy</h4>
+<div class="outline-text-4" id="text-2-7-5">
+<p>
+We are going to initialize our spike trains by drawing for a given duration&#x2013;a multiple (for instance 10) of the mean inter spike interval of the mean field solution&#x2013;spikes independently with the mean field rate. The program will therefore take two parameters: 
+</p>
+<ul class="org-ul">
+<li>the mean field rate (0.2217 in the last section case).</li>
+<li>the multiple of the mean field inter spike interval (the inverse of the mean field rate) during which spikes are drawn in an IID way.</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline38" class="outline-3">
+<h3 id="orgheadline38"><span class="section-number-3">2.8</span> Advancing by one step: to spike or not to spike</h3>
+<div class="outline-text-3" id="text-2-8">
+</div><div id="outline-container-orgheadline28" class="outline-4">
+<h4 id="orgheadline28"><span class="section-number-4">2.8.1</span> "Early phase": function <code>spike_or_not_early</code></h4>
+<div class="outline-text-4" id="text-2-8-1">
+<p>
+If we are in the "early phase" of the simulation (say for an number of time steps &lt; 10/\(\overline{\nu}\)) we draw for each neuron a random number with a uniform distribution between zero and one and if the number is smaller than \(\overline{\nu}\) the neuron spikes and remains silent otherwise. Function <code>spike_or_not_early</code> defined next returns 0 if the neuron does not spike and 1 otherwise; it takes two parameters:
+</p>
+<ul class="org-ul">
+<li><b>nu_bar</b> (double): the mean field rate.</li>
+<li><b>r</b> (a pointer to a <a href="https://www.gnu.org/software/gsl/manual/html_node/Random-number-generator-initialization.html#Random-number-generator-initialization">gsl_rng</a>): a pointer on an allocated <code>gsl_rng</code>.</li>
+</ul>
+<p>
+It is just a wrapper around <code>gsl</code> <code>gsl_ran_flat</code> function:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock55">int spike_or_not_early(double nu_bar,
+		       gsl_rng * r)
+{
+  if (gsl_ran_flat(r,0.0,1.0) &lt;= nu_bar)
+    return 1;
+  else
+    return 0;
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline29" class="outline-4">
+<h4 id="orgheadline29"><span class="section-number-4">2.8.2</span> "Main phase"</h4>
+<div class="outline-text-4" id="text-2-8-2">
+<p>
+Once the early phase is over, every neuron should have fired a few spikes (if the phase is long enough) and from now on, I'm assuming that a last spike is available for each neuron in the network and therefore that each <code>history[i]</code> has at least one element. I'm considering a given neuron \(i \in \{0,\ldots,\texttt{n_neurons}-1\} \doteq I\) at a given time index \(t+1\) and I want to write a function that returns 0 if the neuron does not spike at that time (conditioned on the history) and 1 if it does. In order to clarify the code, I will write:\[u_{t+1}(i) \doteq \sum_{j \in I} W_{j \rightarrow i} \sum_{s=L_{t+1}^i+1}^t g_j(t+1-s) X_s(j)\, .\] That is, \(u_{t+1}(i)\) the pseudo-membrane potential used as the argument of function \(\varphi_i\) in equation 2.3. 
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline30" class="outline-4">
+<h4 id="orgheadline30"><span class="section-number-4">2.8.3</span> <code>get_u_i</code></h4>
+<div class="outline-text-4" id="text-2-8-3">
+<p>
+I'm going first to define a function <code>get_u_i</code> that requires the following parameters:
+</p>
+<ul class="org-ul">
+<li><b>n_idx</b> (size_t): the postsynaptic neuron index.</li>
+<li><b>t</b> (integer): the time index (the \(t+1\) of the previous equations).</li>
+<li><b>history</b> (array of GArrays): the history.</li>
+<li><b>graph</b> (pointer to pointer to presynaptic): the graph.</li>
+<li><b>tau_e</b> (double): the excitatory time constant.</li>
+<li><b>d_e</b> (size_t): the excitatory delay.</li>
+<li><b>tau_i</b> (double): the inhibitory time constant.</li>
+<li><b>d_i</b> (size_t): the inhibitory delay.</li>
+</ul>
+<p>
+The function returns a double, the value of \(u_{t+1}(i)\). I assume moreover that the two functions <code>g_e</code> and <code>g_i</code> returning the synaptic leak are available in the environment.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock56">double get_u_i(size_t n_idx, int t,
+	       GArray **history, presynaptic **graph,
+	       double tau_e, size_t d_e,
+	       double tau_i, size_t d_i)
+{
+  double u_i=0.0;
+  // Get the time of the last spike of n_idx
+  int L_i = g_array_index(history[n_idx],int,history[n_idx]-&gt;len-1);
+  if (graph[n_idx]-&gt;size &gt; 0)
+    {// n_idx has presynaptic neurons
+      for (size_t pre_idx=0; pre_idx&lt;graph[n_idx]-&gt;size; pre_idx++)
+	{// Loop on the presynaptic neurons
+	  // Get the index of the presynaptic neuron
+	  uint j = gsl_vector_uint_get(graph[n_idx]-&gt;idx,pre_idx);
+	  // Get the synaptic weight
+	  double w = gsl_vector_get(graph[n_idx]-&gt;w,pre_idx);
+	  // Get the index of the last spike of neuron j
+	  size_t k = history[j]-&gt;len-1;
+	  // Get the time of the last spike of j
+	  int s = g_array_index(history[j],int,k);
+	  while (s &gt; L_i)
+	    {
+	      if (w &gt; 0) //excitatory synapse
+		u_i += w*g_e(t-s,tau_e,d_e);
+	      else //inhibitory synapse
+		u_i += w*g_i(t-s,tau_i,d_i);
+	      k--;
+	      if (k&lt;0)
+		s = L_i;
+	      else
+		s = g_array_index(history[j],int,k);
+	    } // end of conditional on s &gt; L_i  
+	} // end of the loop on pre_idx
+    } // end of the conditional on graph[n_idx]-&gt;size &gt; 0
+  return u_i;
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline31" class="outline-4">
+<h4 id="orgheadline31"><span class="section-number-4">2.8.4</span> <code>varphi</code></h4>
+<div class="outline-text-4" id="text-2-8-4">
+<p>
+Function <code>varphi</code> depends on three parameters:
+</p>
+
+<ul class="org-ul">
+<li><b>u</b> (double): the "membrane" potential of the considered neuron&#x2014;returned by a call to <code>get_u_i</code>&#x2014;.</li>
+<li><b>varphi_0</b> (double): the basal rate (should be larger than 0 and smaller than 1).</li>
+<li><b>k</b> (double): the constant controlling the steepness of the \(\varphi\) function.</li>
+</ul>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock57">double varphi(double u, double varphi_0, double k)
+{
+  if (u &lt; 0)
+    return varphi_0;
+  else
+    {
+#if defined(FAST_EXP)
+      return varphi_0 + (1-varphi_0)*gsl_pow_2 (1-EXP(-u/k));
+#else
+      return varphi_0 + (1-varphi_0)*gsl_pow_2 (1-exp(-u/k));
+#endif
+    }
+}
+</pre>
+</div>
+
+<p>
+A program using <code>varphi</code> requires the directive <code>#include &lt;gsl/gsl_math.h&gt;</code>
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline32" class="outline-4">
+<h4 id="orgheadline32"><span class="section-number-4">2.8.5</span> <code>spike_or_not</code></h4>
+<div class="outline-text-4" id="text-2-8-5">
+<p>
+Function <code>spike_or_not</code> combines functions <code>get_u_i</code> and <code>varphi</code> and returns 0 if the neuron does not spike and 1 otherwise. It depends on the following parameters:
+</p>
+
+<ul class="org-ul">
+<li><b>n_idx</b> (size_t): the postsynaptic neuron index.</li>
+<li><b>t</b> (integer): the time index (the \(t+1\) of the previous equations).</li>
+<li><b>history</b> (array of GArrays): the history.</li>
+<li><b>graph</b> (pointer to pointer to presynaptic): the graph.</li>
+<li><b>tau_e</b> (double): the excitatory time constant.</li>
+<li><b>d_e</b> (size_t): the excitatory delay.</li>
+<li><b>tau_i</b> (double): the inhibitory time constant.</li>
+<li><b>d_i</b> (size_t): the inhibitory delay.</li>
+<li><b>varphi_0</b> (double): the basal rate (should be larger than 0 and smaller than 1).</li>
+<li><b>k</b> (double): the constant controlling the steepness of the \(\varphi\) function.</li>
+<li><b>r</b> (a pointer to a <a href="https://www.gnu.org/software/gsl/manual/html_node/Random-number-generator-initialization.html#Random-number-generator-initialization">gsl_rng</a>): a pointer on an allocated <code>gsl_rng</code>.</li>
+</ul>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock58">int spike_or_not(size_t n_idx, int t,
+		 GArray **history, presynaptic **graph,
+		 double tau_e, size_t d_e,
+		 double tau_i, size_t d_i,
+		 double varphi_0, double k,
+		 gsl_rng * r)
+{
+  double u = get_u_i(n_idx, t, history, graph,
+		     tau_e, d_e, tau_i, d_i);
+  if (gsl_ran_flat(r,0.0,1.0) &lt;= varphi(u, varphi_0, k))
+    return 1;
+  else
+    return 0;
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline33" class="outline-4">
+<h4 id="orgheadline33"><span class="section-number-4">2.8.6</span> <code>sim_params</code> structure and associated functions</h4>
+<div class="outline-text-4" id="text-2-8-6">
+<p>
+In order to have shorter parameters' list for our function call we define a new type, <code>sim_gl_params</code>, based on a structure that contains all the parameters passed by the user to the program:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock59">typedef struct
+{
+  size_t n_neurons, d_e, d_i, total_steps, early_steps;
+  double p_e, w_e_min, w_e_max, p_i, w_i_min, w_i_max, varphi_0, \
+    varphi_k, tau_e, tau_i, nu_bar;
+  gsl_vector * G_e;
+  gsl_vector * G_i;
+} sim_gl_params;
+</pre>
+</div>
+
+<p>
+The meaning of these structure members is specified in the <code>usage</code> function of our simulation program:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock60">void print_usage_sim_gl() {
+  printf("Usage: \n"
+	 "  --n_neurons &lt;positive integer&gt;: the number of neurons in "
+	 "the network\n"
+	 "  --p_e &lt;double in (0,1)&gt;: the probability of excitatory "
+	 "connection between two neurons\n"
+	 "  --w_e_min &lt;positive double&gt;: the minimal excitatory "
+	 "synaptic weight\n"
+	 "  --w_e_min &lt;positive double&gt;: the maximal excitatory "
+	 "synaptic weight\n"
+	 "  --tau_e &lt;positive double&gt;: the time constant of "
+	 "excitatory leak functions\n"
+	 "  --d_e &lt;positive integer&gt;: the excitatory synaptic delay\n"
+	 "  --p_i &lt;double in (0,1)&gt;: the probability of inhibitory "
+	 "connection between two neurons\n"
+	 "  --w_i_min &lt;negative double&gt;: the minimal inhibitory "
+	 "synaptic weight\n"
+	 "  --w_i_max &lt;negative double&gt;: the maximal inhibitory "
+	 "synaptic weight\n"
+	 "  --tau_i &lt;positive double&gt;: the time constant of "
+	 "inhibitory leak functions\n"
+	 "  --d_i &lt;positive integer&gt;: the inhibitory synaptic delay\n"
+	 "  --varphi_0 &lt;double in (0,1)&gt;: the basal value of the "
+	 "activation function\n"
+	 "  --varphi_k &lt;positive double&gt;: constant controlling the "
+	 "steepness of the activation function\n"
+	 "  --nu_bar &lt;double in (0,1)&gt;: the mean field rate\n"
+	 "  --early_steps &lt;positive integer&gt;: the number of time "
+	 "steps with IID draws\n"
+	 "  --total_steps &lt;positive integer&gt;: the total number of "
+	 "time steps to simulate\n"
+	 "\n");
+}
+</pre>
+</div>
+
+<p>
+We now write the <code>&lt;&lt;read_par_sim_gl&gt;&gt;</code> code:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock61">int read_par_sim_gl(int argc, char ** argv, sim_gl_params *p)
+{
+  // Define default values
+  
+  p-&gt;n_neurons = 800;
+  p-&gt;p_e = 0.1;
+  p-&gt;w_e_min = 0.2;
+  p-&gt;w_e_max = 0.3;
+  p-&gt;tau_e = 5;
+  p-&gt;d_e = 1;
+  p-&gt;p_i = 0.25;
+  p-&gt;w_i_min = -0.02;
+  p-&gt;w_i_max = -0.005;
+  p-&gt;tau_i = 5;
+  p-&gt;d_i = 4;
+  p-&gt;varphi_0 = 0.01;
+  p-&gt;varphi_k = 17;
+  p-&gt;nu_bar = 0.2217;
+  p-&gt;early_steps = 100;
+  p-&gt;total_steps = 60000;
+  {int opt;
+    static struct option long_options[] = {
+      {"n_neurons",optional_argument,NULL,'n'},
+      {"p_e",optional_argument,NULL,'a'},
+      {"w_e_min",optional_argument,NULL,'b'},
+      {"w_e_max",optional_argument,NULL,'c'},
+      {"p_i",optional_argument,NULL,'d'},
+      {"w_i_min",optional_argument,NULL,'e'},
+      {"w_i_max",optional_argument,NULL,'f'},
+      {"help",no_argument,NULL,'h'},
+      {"tau_e",optional_argument,NULL,'i'},
+      {"d_e",optional_argument,NULL,'j'},
+      {"tau_i",optional_argument,NULL,'k'},
+      {"d_i",optional_argument,NULL,'l'},
+      {"varphi_0",optional_argument,NULL,'m'},
+      {"varphi_k",optional_argument,NULL,'g'},
+      {"nu_bar",optional_argument,NULL,'o'},
+      {"early_steps",optional_argument,NULL,'p'},
+      {"total_steps",optional_argument,NULL,'q'},
+      {NULL,0,NULL,0}
+    };
+    int long_index =0;
+    while ((opt = getopt_long(argc,argv,
+			      "hn:a:b:c:d:e:f:g:i:j:k:l:m:o:p:q:",
+			      long_options,&amp;long_index)) != -1) {
+      switch(opt) {
+      case 'n':
+	{
+	  int n=atoi(optarg);
+	  if (n &lt;= 0)
+	    {
+	      fprintf(stderr,"The number of neurons should be &gt; 0.\n");
+	      return -1;
+	    }
+	  p-&gt;n_neurons=(size_t) n; 
+	}
+	break;
+      case 'a': p-&gt;p_e=atof(optarg);
+	break;
+      case 'b': p-&gt;w_e_min=atof(optarg);
+	break;
+      case 'c': p-&gt;w_e_max=atof(optarg);
+	break;
+      case 'd': p-&gt;p_i=atof(optarg);
+	break;
+      case 'e': p-&gt;w_i_min=atof(optarg);
+	break;
+      case 'f': p-&gt;w_i_max=atof(optarg);
+	break;
+      case 'i': p-&gt;tau_e=atof(optarg);
+	break;
+      case 'j':
+	{
+	  int n=atoi(optarg);
+	  if (n &lt;= 0)
+	    {
+	      fprintf(stderr,"The excitatory synaptic delay should "
+		      "be &gt; 0.\n");
+	      return -1;
+	    }
+	  p-&gt;d_e=(size_t) n; 
+	}
+	break;
+      case 'k': p-&gt;tau_i=atof(optarg);
+	break;
+      case 'l':
+	{
+	  int n=atoi(optarg);
+	  if (n &lt;= 0)
+	    {
+	      fprintf(stderr,"The inhibitory synaptic delay should "
+		      "be &gt; 0.\n");
+	      return -1;
+	    }
+	  p-&gt;d_i=(size_t) n; 
+	}
+	break;
+      case 'm': p-&gt;varphi_0=atof(optarg);
+	break;
+      case 'g': p-&gt;varphi_k=atof(optarg);
+	break;
+      case 'o': p-&gt;nu_bar=atof(optarg);
+	break;
+      case 'p':
+	{
+	  int n=atoi(optarg);
+	  if (n &lt;= 0)
+	    {
+	      fprintf(stderr,"The number of early steps should be "
+		      "&gt; 0.\n");
+	      return -1;
+	    }
+	  p-&gt;early_steps=(size_t) n; 
+	}
+	break;
+      case 'q':
+	{
+	  int n=atoi(optarg);
+	  if (n &lt;= 0)
+	    {
+	      fprintf(stderr,"The total number of steps should be "
+		      "&gt; 0.\n");
+	      return -1;
+	    }
+	  p-&gt;total_steps=(size_t) n; 
+	}
+	break;
+      case 'h': print_usage_sim_gl();
+	return -1;
+      default : print_usage_sim_gl();
+	return -1;
+      }
+    }
+  }
+  // Check that the parameters are correct
+  if (p-&gt;p_e &lt; 0 || p-&gt;p_e &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= p_e &lt;= 1.\n");
+      return -1;
+    }
+  if (p-&gt;p_i &lt; 0 || p-&gt;p_i &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= p_i &lt;= 1.\n");
+      return -1;
+    }
+  if (p-&gt;w_e_min &lt;= 0 || p-&gt;w_e_max &lt;= 0)
+    {
+      fprintf(stderr,"Excitatory weights must be &gt; 0.\n");
+      return -1;
+    }
+  if (p-&gt;w_e_min &gt;= p-&gt;w_e_max)
+    {
+      fprintf(stderr,"We must have w_e_min &lt; w_e_max.\n");
+      return -1;
+    }
+  if (p-&gt;w_i_min &gt;= 0 || p-&gt;w_i_max &gt;= 0)
+    {
+      fprintf(stderr,"Inhibitory weights must be &lt; 0.\n");
+      return -1;
+    }
+  if (p-&gt;w_i_min &gt;= p-&gt;w_i_max)
+    {
+      fprintf(stderr,"We must have w_i_min &lt; w_i_max.\n");
+      return -1;
+    }
+  if (p-&gt;tau_i &lt; 0)
+    {
+      fprintf(stderr,"We must have 0 &lt;= tau_i.\n");
+      return -1;
+    }
+  if (p-&gt;tau_e &lt; 0)
+    {
+      fprintf(stderr,"We must have 0 &lt;= tau_e.\n");
+      return -1;
+    }
+  if (p-&gt;varphi_0 &lt; 0 || p-&gt;varphi_0 &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= varphi_0 &lt;= 1.\n");
+      return -1;
+    }
+  if (p-&gt;varphi_k &lt;= 0)
+    {
+      fprintf(stderr,"We must have 0 &lt; varphi_k.\n");
+      return -1;
+    }
+  if (p-&gt;nu_bar &lt; 0 || p-&gt;nu_bar &gt; 1)
+    {
+      fprintf(stderr,"We must have 0 &lt;= nu_bar &lt;= 1.\n");
+      return -1;
+    }
+  return 0;
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline34" class="outline-4">
+<h4 id="orgheadline34"><span class="section-number-4">2.8.7</span> <code>mk_one_step</code></h4>
+<div class="outline-text-4" id="text-2-8-7">
+<p>
+Function <code>mk_one_step</code> as its name says make a single time step of the algorithm. To that end is first assigns a vector of integers with as many elements as neurons in the network and with a binary content: 0 is the neuron does not spike during that step and 1 otherwise. The <code>history</code> array is then updated. The function takes the following parameters:
+</p>
+
+<ul class="org-ul">
+<li><b>t</b> (integer): the time index (the \(t+1\) of the previous equations).</li>
+<li><b>history</b> (array of GArrays): the history.</li>
+<li><b>graph</b> (pointer to pointer to presynaptic): the graph.</li>
+<li><b>params</b> (pointer to a sim_gl_params): the structure containing the parameters passed to the program.</li>
+<li><b>r</b> (a pointer to a <a href="https://www.gnu.org/software/gsl/manual/html_node/Random-number-generator-initialization.html#Random-number-generator-initialization">gsl_rng</a>): a pointer on an allocated <code>gsl_rng</code>.</li>
+</ul>
+
+<p>
+The function's definition is:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock62">int mk_one_step(int t,
+		GArray **history,
+		presynaptic **graph,
+		sim_gl_params * params,
+		gsl_rng * r)
+{
+  int res[params-&gt;n_neurons];
+  // Spike or no spike for each neuron
+  if (t &lt; params-&gt;early_steps)
+    {
+      for (size_t n_idx=0; n_idx&lt;params-&gt;n_neurons; n_idx++)
+	res[n_idx] = spike_or_not_early(params-&gt;nu_bar,r);
+    }
+  else
+    {
+      for (size_t n_idx=0; n_idx&lt;params-&gt;n_neurons; n_idx++)
+	res[n_idx] = spike_or_not(n_idx, t, history, graph,
+				  params-&gt;tau_e,params-&gt;d_e,
+				  params-&gt;tau_i,params-&gt;d_i,
+				  params-&gt;varphi_0,params-&gt;varphi_k,
+				  r);
+      
+    }
+  // Upate history
+  for (size_t n_idx = 0; n_idx &lt; params-&gt;n_neurons; n_idx++)
+    {
+      if (res[n_idx] == 1)
+	g_array_append_val(history[n_idx],t);
+    }
+  return 0;
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline35" class="outline-4">
+<h4 id="orgheadline35"><span class="section-number-4">2.8.8</span> <code>write_sim_gl_preamble</code></h4>
+<div class="outline-text-4" id="text-2-8-8">
+<p>
+Our <code>sim_gl</code> program is going to write its results to the <code>stdout</code> starting with a preamble (lines starting with a <code>#</code> interpreted as comments by <code>gnuplot</code>) containing the value of the parameters used. The function writing the preamble, <code>write_sim_gl_preamble</code> is defined next:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock63">int write_sim_gl_preamble(sim_gl_params * params, gsl_rng * r)
+{
+  fprintf(stdout,"###########################################\n"
+	  "# Parameters used when running the program\n");
+  fprintf(stdout,"# The number of neurons is: %d\n",
+	  (int) params-&gt;n_neurons);
+  fprintf(stdout,"# Probability of excitatory connection: %g\n",
+	  params-&gt;p_e);
+  fprintf(stdout,"# Minimal excitatory weight: %g\n", params-&gt;w_e_min);
+  fprintf(stdout,"# Maximal excitatory weight: %g\n", params-&gt;w_e_max);
+  fprintf(stdout,"# Excitatory time constant: %g\n", params-&gt;tau_e);
+  fprintf(stdout,"# Excitatory time delay: %d\n", (int) params-&gt;d_e);
+  fprintf(stdout,"# Probability of inhibitory connection: %g\n",
+	  params-&gt;p_i);
+  fprintf(stdout,"# Minimal inhibitory weight: %g\n", params-&gt;w_i_min);
+  fprintf(stdout,"# Maximal inhibitory weight: %g\n", params-&gt;w_i_max);
+  fprintf(stdout,"# Inhibitory time constant: %g\n", params-&gt;tau_i);
+  fprintf(stdout,"# Inhibitory time delay: %d\n", (int) params-&gt;d_i);
+  fprintf(stdout,"# varphi_0: %g\n", params-&gt;varphi_0);
+  fprintf(stdout,"# varphi_k: %g\n", params-&gt;varphi_k);
+  fprintf(stdout,"# nu_bar: %g\n", params-&gt;nu_bar);
+  fprintf(stdout,"# early_steps: %d\n", (int) params-&gt;early_steps);
+  fprintf(stdout,"# total_steps: %d\n", (int) params-&gt;total_steps);
+  fprintf(stdout,"#\n");
+  fprintf(stdout,"# Generator type: %s\n", gsl_rng_name (r));
+  fprintf(stdout,"# Seed = %lu\n", gsl_rng_default_seed);
+  fprintf(stdout,"###########################################\n");
+  fprintf(stdout,"\n");
+  fprintf(stdout,"\n");
+  return 0;
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline36" class="outline-4">
+<h4 id="orgheadline36"><span class="section-number-4">2.8.9</span> <code>write_sim_gl_results</code></h4>
+<div class="outline-text-4" id="text-2-8-9">
+<p>
+At the end of its run the program will write to the <code>stdout</code> the spike trains of the neurons. This will be done neuron per neuron with two blank lines in between neurons (so that <code>gnuplot</code> automatically recognizes the different data set). The data from neuron <code>X</code> will start after a line like <code># Start neuron X with N spikes</code> and will end with a line like <code># End neuron X</code>:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock64">int write_sim_gl_results(size_t n_neurons, GArray **history)
+{
+  for (size_t n_idx = 0; n_idx &lt; n_neurons; n_idx++)
+    {
+      fprintf(stdout,"# Start neuron %d with %d spikes\n",
+	      (int) n_idx, history[n_idx]-&gt;len);
+      for (size_t s_idx = 0; s_idx &lt; history[n_idx]-&gt;len; s_idx++)
+	{
+	  fprintf(stdout,"%d\n", g_array_index(history[n_idx],int,s_idx));
+	}
+      fprintf(stdout,"# End neuron %d\n",(int) n_idx);
+      fprintf(stdout,"\n");
+      fprintf(stdout,"\n");
+    }
+  return 0;
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline37" class="outline-4">
+<h4 id="orgheadline37"><span class="section-number-4">2.8.10</span> Program <code>sim_gl</code></h4>
+<div class="outline-text-4" id="text-2-8-10">
+<p>
+We end-up with the code of <code>sim_gl</code> that we save in a file called <code>sim_gl.c</code>:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock65">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;getopt.h&gt;
+#include &lt;gsl/gsl_errno.h&gt;
+#include &lt;gsl/gsl_math.h&gt;
+#include &lt;gsl/gsl_vector.h&gt;
+#include &lt;gsl/gsl_vector_uint.h&gt;
+#include &lt;gsl/gsl_rng.h&gt;
+#include &lt;gsl/gsl_randist.h&gt;
+#include &lt;glib.h&gt;
+
+&lt;&lt;presynaptic&gt;&gt;
+
+presynaptic ** mk_graph(size_t n_neurons,
+			double p_e, double w_e_min, double w_e_max,
+			double p_i, double w_i_min, double w_i_max,
+			gsl_rng * r);
+
+int free_graph(presynaptic **graph, size_t n_neurons);
+
+GArray ** malloc_garrays2(size_t n_neurons);
+
+int free_garrays2(GArray ** history, size_t n_neurons);
+
+&lt;&lt;Schraudolph-exp&gt;&gt;
+
+&lt;&lt;sim_gl_params&gt;&gt;
+
+int write_sim_gl_results(size_t n_neurons, GArray **history);
+
+int write_sim_gl_preamble(sim_gl_params * params, gsl_rng * r);
+
+int mk_one_step(int t,
+		GArray **history,
+		presynaptic **graph,
+		sim_gl_params * params,
+		gsl_rng * r);
+
+int read_par_sim_gl(int argc, char ** argv, sim_gl_params *p);
+
+void print_usage_sim_gl();
+
+int spike_or_not(size_t n_idx, int t,
+		 GArray **history, presynaptic **graph,
+		 double tau_e, size_t d_e,
+		 double tau_i, size_t d_i,
+		 double varphi_0, double k,
+		 gsl_rng * r);
+
+double varphi(double u, double varphi_0, double k);
+
+double get_u_i(size_t n_idx, int t,
+	       GArray **history, presynaptic **graph,
+	       double tau_e, size_t d_e,
+	       double tau_i, size_t d_i);
+
+int spike_or_not_early(double nu_bar,
+		       gsl_rng * r);
+
+double g_i(size_t delay, double tau_i, size_t d_i);
+
+double g_e(size_t delay, double tau_e, size_t d_e);
+
+gsl_vector * G_i(double tau_i, size_t d_i);
+
+gsl_vector * G_e(double tau_e, size_t d_e);
+
+int main(int argc, char ** argv)
+{
+  sim_gl_params params;
+  // Read and check parameters
+  int status = read_par_sim_gl(argc, argv, &amp;params);
+
+  if (status == -1) exit (EXIT_FAILURE);
+  
+  params.G_e = G_e(params.tau_e, params.d_e);
+  params.G_i = G_i(params.tau_i, params.d_i);
+
+  // Initialize RNG
+  const gsl_rng_type * T;
+  gsl_rng * r;
+  gsl_rng_env_setup();
+
+  T = gsl_rng_default;
+  r = gsl_rng_alloc (T);
+
+  // Generate network
+  presynaptic **graph=mk_graph(params.n_neurons,
+			       params.p_e, params.w_e_min,
+			       params.w_e_max,
+			       params.p_i, params.w_i_min,
+			       params.w_i_max, r);
+
+  // Allocate history
+  GArray **history = malloc_garrays2 (params.n_neurons);
+
+  // Write preamble
+  write_sim_gl_preamble(&amp;params, r);
+  
+  // Do the job
+  for (int step_idx=0; step_idx &lt; (int) params.total_steps; step_idx++)
+    {
+      mk_one_step(step_idx, history, graph, &amp;params, r);
+    }
+
+  // Write results
+  write_sim_gl_results(params.n_neurons, history);
+  
+  // Free memory taken up by history
+  free_garrays2(history,params.n_neurons);
+  
+  gsl_rng_free (r);
+  gsl_vector_free(params.G_e);
+  gsl_vector_free(params.G_i);
+  free_graph(graph, params.n_neurons);
+  exit (EXIT_SUCCESS);
+}
+
+&lt;&lt;G_i&gt;&gt;
+
+&lt;&lt;G_e&gt;&gt;
+
+&lt;&lt;g_i&gt;&gt;
+
+&lt;&lt;g_e&gt;&gt;
+
+&lt;&lt;spike_or_not_early&gt;&gt;
+
+&lt;&lt;get_u_i&gt;&gt;
+
+&lt;&lt;varphi&gt;&gt;
+
+&lt;&lt;spike_or_not&gt;&gt;
+
+&lt;&lt;print_usage_sim_gl&gt;&gt;
+
+&lt;&lt;read_par_sim_gl&gt;&gt;
+
+&lt;&lt;mk_one_step&gt;&gt;
+
+&lt;&lt;write_sim_gl_preamble&gt;&gt;
+
+&lt;&lt;write_sim_gl_results&gt;&gt;
+
+&lt;&lt;malloc_garrays2&gt;&gt;
+
+&lt;&lt;free_garrays2&gt;&gt;
+
+&lt;&lt;mk_graph&gt;&gt;
+
+&lt;&lt;free_graph&gt;&gt;
+</pre>
+</div>
+
+<p>
+We compile it with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock66">make P=sim_gl
+</pre>
+</div>
+
+<pre class="example">
+cc `pkg-config --cflags glib-2.0` -g -Wall -O3 -std=gnu11 \
+   sim_gl.c  `pkg-config --libs glib-2.0 gsl `  -o sim_gl
+</pre>
+
+<p>
+We can get the help with
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock67">./sim_gl --help
+</pre>
+</div>
+
+<p>
+We run it with 10000 time steps (this takes 190 seconds on my slow computer):
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock68">time ./sim_gl --total_steps=10000 &gt; sim_gl_test0.txt
+</pre>
+</div>
+
+<p>
+We can see the first 50 lines of the file containing the results:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell">head -n 50 sim_gl_test0.txt
+</pre>
+</div>
+
+<pre class="example">
+###########################################
+# Parameters used when running the program
+# The number of neurons is: 800
+# Probability of excitatory connection: 0.1
+# Minimal excitatory weight: 0.2
+# Maximal excitatory weight: 0.3
+# Excitatory time constant: 5
+# Excitatory time delay: 1
+# Probability of inhibitory connection: 0.25
+# Minimal inhibitory weight: -0.02
+# Maximal inhibitory weight: -0.005
+# Inhibitory time constant: 5
+# Inhibitory time delay: 4
+# varphi_0: 0.01
+# varphi_k: 17
+# nu_bar: 0.2217
+# early_steps: 100
+# total_steps: 10000
+#
+# Generator type: mt19937
+# Seed = 0
+###########################################
+
+
+# Start neuron 0 with 191 spikes
+3
+5
+8
+14
+16
+20
+24
+25
+29
+35
+36
+37
+51
+54
+55
+60
+67
+69
+71
+72
+82
+87
+98
+101
+108
+</pre>
+
+<p>
+We can then make a raster plot with the first 10 of the 800 neurons:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-gnuplot" id="orgsrcblock69">set xlabel "Time step"
+set ylabel ""
+unset key
+plot [0:10000] [-1:10] "sim_gl_test0.txt" index 0 using 1:(0) with dots, \
+     "" index 1 using 1:(1) with dots, \
+     "" index 2 using 1:(2) with dots, \
+     "" index 3 using 1:(3) with dots, \
+     "" index 4 using 1:(4) with dots, \
+     "" index 5 using 1:(5) with dots, \
+     "" index 6 using 1:(6) with dots, \
+     "" index 7 using 1:(7) with dots, \
+     "" index 8 using 1:(8) with dots, \
+     "" index 9 using 1:(9) with dots
+</pre>
+</div>
+
+
+<div class="figure">
+<p><img src="sim_gl_test0-raster.png" alt="sim_gl_test0-raster.png" />
+</p>
+</div>
+
+<p>
+We can recompile the code with the <code>-DFAST_EXP</code> option in order to get the fast exponential version with: 
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock70">mv sim_gl sim_gl0
+CFLAGS=-DFAST_EXP make P=sim_gl
+</pre>
+</div>
+
+<pre class="example">
+cc -DFAST_EXP `pkg-config --cflags glib-2.0` -g -Wall -O3 -std=gnu11 \
+   sim_gl.c  `pkg-config --libs glib-2.0 gsl `  -o sim_gl
+</pre>
+
+<p>
+And we run it again with (it takes 83 seconds this time):
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock71">time ./sim_gl --total_steps=10000 &gt; sim_gl_test1.txt
+</pre>
+</div>
+
+<p>
+A "full" comparison using the default parameters (800 neurons and 60\(\times 10^3\) time steps) on my laptop runs in 19 min. and 12 sec. for the <code>math</code> library <code>exp</code> function and 8 min. 15 sec. with the <code>fast exp</code> macro.
+</p>
+
+<p>
+We can also compute the instantaneous rate of a neuron (an estimate of the spiking probability of a single neuron) from our simulated data as follows. We first remove all the comments from the data file <code>sim_gl_test0.txt</code> with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock72">grep "^[[:digit:]]" sim_gl_test0.txt &gt; sim_gl_test0_spike_only
+</pre>
+</div>
+
+<p>
+We then use <code>gnuplot</code> to make our graph:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-gnuplot" id="orgsrcblock73">unset key
+set grid
+set xlabel "Time step"
+set ylabel ""
+set label 1 "Single neuron spike frequency" at 30000,0.045
+plot [0:60000] [0:0.05] "sim_gl_test0_spike_only" u 1:(1./800) \
+     smooth frequency with lines linecolor rgb "black"
+</pre>
+</div>
+
+
+<div class="figure">
+<p><img src="sim_gl_test0_rate.png" alt="sim_gl_test0_rate.png" />
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline42" class="outline-2">
+<h2 id="orgheadline42"><span class="section-number-2">3</span> Analysis</h2>
+<div class="outline-text-2" id="text-3">
+</div><div id="outline-container-orgheadline40" class="outline-3">
+<h3 id="orgheadline40"><span class="section-number-3">3.1</span> Extracting single neuron spike trains the "elementary way"</h3>
+<div class="outline-text-3" id="text-3-1">
+<p>
+As explained the content of the data file is made first of the simulation parameters (so that the simulation can be <i>exactly reproduced</i>) and is then made of the spike times of the individual neurons from the first to the last. Each spike train starts with: <code># Start neuron X with Y spikes</code>, and ends with: <code># End neuron X</code>. It is then straightforward to use the <code>Linux/Unix</code> command line tools to extract the spike train of neuron 0 (we start counting at 0) from data file <code>sim_gl_test0.txt</code>. We use <code>sed</code> end store the result in a file called <code>sim_gl_test0_st_n0</code> as follows:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock74">sed '1,/# Start neuron 0 with/d;/# End neuron 0/,$d' sim_gl_test0.txt \
+    &gt; sim_gl_test0_st_n0
+</pre>
+</div>
+
+<p>
+We check that no major problem occurred by making sure we have the right number of spikes. In the original file, for neuron 0 we had:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock75">grep "# Start neuron 0 with" sim_gl_test0.txt
+</pre>
+</div>
+
+<pre class="example">
+# Start neuron 0 with 947 spikes
+</pre>
+
+<p>
+We see that the original file contains 947 spikes for neuron 0. In our new file we have:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock76">wc -l sim_gl_test0_st_n0
+</pre>
+</div>
+
+<pre class="example">
+947 sim_gl_test0_st_n0
+</pre>
+
+<p>
+So everything looks OK. A quick and somewhat dirty way to get the histogram of the inter spike interval for this neuron is first to create a file with two columns, the first column containing the spike times from the 51st spike to the one before the end (we start at 51 to "forget" about the initialization) and the second from the 52d to the end:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock77">sed -n '51,946p' sim_gl_test0_st_n0 &gt; first
+sed -n '52,$p' sim_gl_test0_st_n0 &gt; second
+paste second first &gt; mk-sim_gl_test0_st_n0_diff
+</pre>
+</div>
+
+<p>
+Then with <code>gnuplot</code>:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-gnuplot" id="orgsrcblock78">binc(x,s) = s*(floor(x/s)+0.5)
+set boxwidth 5
+unset key
+set xlabel "Inter spike interval"
+set ylabel "Estimated probability"
+plot [0:400] [] "both" u (binc($1-$2,5)):(1./(5*896)) smooth frequency\
+     with boxes
+</pre>
+</div>
+
+
+<div class="figure">
+<p><img src="sim_gl_test0_st_n0_diff_hist.png" alt="sim_gl_test0_st_n0_diff_hist.png" />
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline41" class="outline-3">
+<h3 id="orgheadline41"><span class="section-number-3">3.2</span> Doing the same job with <code>R</code></h3>
+<div class="outline-text-3" id="text-3-2">
+<p>
+To get a quick access to spike train analysis routines, we will write a short <code>R</code> function to read into <code>R</code> the output of the simulation code and we will then be able to use the <a href="https://cran.r-project.org/web/packages/STAR/index.html">STAR</a> package&#x2013;this means of course that you will need <code>R</code> and <code>STAR</code> on your computer&#x2013;. To make sure that everything is there, start <code>R</code> and type (if you get a message "there is no package called ‘STAR’" type first <code>install.packages("STAR")</code>):
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R" id="orgsrcblock79">library(STAR)
+</pre>
+</div>
+
+<pre class="example">
+Le chargement a nécessité le package : survival
+Le chargement a nécessité le package : mgcv
+Le chargement a nécessité le package : nlme
+This is mgcv 1.8-12. For overview type 'help("mgcv-package")'.
+Le chargement a nécessité le package : R2HTML
+Le chargement a nécessité le package : gss
+Le chargement a nécessité le package : codetools
+</pre>
+
+<p>
+To write our data file parser, we have to remember (or to go back to our <a href="#orgsrcblock63">write_sim_gl_preamble</a> section) that our "preamble" occupies 22 lines and that the third lines is something like: <code># The number of neurons is: X</code>. At that stage we want to get the number of neurons contained in the simulated network, combining function <code>readLines</code>, <code>strsplit</code> and <code>as.interger</code> will do the job as illustrated next:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R" id="orgsrcblock80">preamble &lt;- readLines("sim_gl_test0.txt",n=22)
+(n_neurons &lt;- as.integer(strsplit(preamble[3],split=": ")[[1]][2]))
+</pre>
+</div>
+
+<pre class="example">
+800
+</pre>
+
+<p>
+We then know that we are dealing (in that case) with 800 spike trains. After the preamble we have a repeated pattern, one for each neuron:
+</p>
+
+<ul class="org-ul">
+<li>Two blank lines.</li>
+<li>A statement like <code># Start neuron X with Y spikes</code>.</li>
+<li><code>Y</code> lines each with one spike time.</li>
+<li>A statement like <code># End neuron X</code>.</li>
+</ul>
+
+<p>
+To be able to move to an arbitrary line within the file we will now use the <code>scan</code> function. With this function we can get the number of spikes generated by the first neuron (neuron with number 0):
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R" id="orgsrcblock81">(intro &lt;- scan("sim_gl_test0.txt",skip=24,nlines=1,what="character"))
+(n &lt;- as.integer(intro[6]))
+</pre>
+</div>
+
+<pre class="example">
+Read 7 items
+[1] "#"      "Start"  "neuron" "0"      "with"   "947"    "spikes"
+[1] 947
+</pre>
+
+<p>
+We can then read the spike train of neuron 0 with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R" id="orgsrcblock82">st0 &lt;- scan("sim_gl_test0.txt",skip=25,nlines=947,what=integer())
+</pre>
+</div>
+
+<pre class="example">
+Read 947 items
+</pre>
+
+<p>
+We can reconstruct the inter spike interval density estimation as follows:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R" id="orgsrcblock83">isi0 &lt;- diff(st0[52:947])
+hist(isi0,seq(0,400,5),freq=FALSE,xlab="Inter spike interval",
+     ylab="Estimated probability")
+</pre>
+</div>
+
+
+<div class="figure">
+<p><img src="isi_from_neuron_0_density_in_R.png" alt="isi_from_neuron_0_density_in_R.png" />
+</p>
+</div>
+
+<p>
+We transform this vector into a <code>spikeTrain</code> object of <code>START</code> with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R" id="orgsrcblock84">st0 &lt;- as.spikeTrain(st0)
+summary(st0)
+</pre>
+</div>
+
+<pre class="example">
+A spike train with 947 events, starting at: 3 and ending at: 59967 (s).
+The mean ISI is: 63.387 and its SD is: 62.686 (s).
+The mean log(ISI) is: 3.617 and its SD is: 1.164
+The shortest interval is: 1
+ and the longest is: 394 (s).
+</pre>
+
+<p>
+We can now write a function that reads the whole content of the data file and sends its result as a <code>list</code> of <code>spikeTrain</code> objects:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R" id="orgsrcblock85">read_sim_file &lt;- function(filename) {
+    preamble &lt;- readLines(filename,n=22)
+    n_neurons &lt;- as.integer(strsplit(preamble[3],split=": ")[[1]][2])
+    res &lt;- vector("list",n_neurons)
+    n_skip = 22
+    for (n_idx in 1:n_neurons) {
+        intro &lt;- scan(filename,skip=n_skip+2,nlines=1,what="character")
+        n &lt;- as.integer(intro[6])
+        res[[n_idx]] &lt;- as.spikeTrain(scan(filename,
+                                           skip=n_skip+3,
+                                           nlines=n,
+                                           what=integer()))
+        n_skip = n_skip + 4 + n
+    }
+    res
+}
+</pre>
+</div>
+
+<p>
+We use it with (it takes a couple of minutes ti run):
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R" id="orgsrcblock86">stList &lt;- read_sim_file("sim_gl_test0.txt")
+</pre>
+</div>
+
+<p>
+And we can use the <code>STAR</code> functions to look for cross-correlations like here between neuron 1 and neuron 19 (counting now from 1 as <code>R</code> does):
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-R" id="orgsrcblock87">hist(lockedTrain(stList[[1]],stList[[19]],laglim=50*c(-1,1)),bw=2)
+</pre>
+</div>
+
+
+<div class="figure">
+<p><img src="sim_gl_test0_cc_n1_n19.png" alt="sim_gl_test0_cc_n1_n19.png" />
+</p>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline46" class="outline-2">
+<h2 id="orgheadline46"><span class="section-number-2">4</span> Tests, examples and how to</h2>
+<div class="outline-text-2" id="text-4">
+</div><div id="outline-container-orgheadline43" class="outline-3">
+<h3 id="orgheadline43"><span class="section-number-3">4.1</span> Changing the rng's seed and type</h3>
+<div class="outline-text-3" id="text-4-1">
+<p>
+The <code>gsl</code> (pseudo-)random number generators (<code>rng</code>) can be selected via an <a href="https://www.gnu.org/software/gsl/manual/html_node/Random-number-environment-variables.html#Random-number-environment-variables">environment variable</a>, <code>GSL_RNG_TYPE</code>, while the seed can be specified via the environment variable <code>GSL_RNG_SEED</code>. The different rng types implemented in the <code>gsl</code> are described in the <a href="https://www.gnu.org/software/gsl/manual/html_node/Random-number-generator-algorithms.html#Random-number-generator-algorithms">documentation</a>. Here is a quick example with only 1000 steps, using the default parameters and setting the rng type to <code>cmrg</code> and the seed to Clara Zetkin birthday (1857-07-05):
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock88">GSL_RNG_TYPE=cmrg GSL_RNG_SEED=18570705 \
+	    ./sim_gl --total_steps=1000 &gt; sim_gl_test_rng.txt
+head -n 22 sim_gl_test_rng.txt
+</pre>
+</div>
+
+<pre class="example">
+###########################################
+# Parameters used when running the program
+# The number of neurons is: 800
+# Probability of excitatory connection: 0.1
+# Minimal excitatory weight: 0.2
+# Maximal excitatory weight: 0.3
+# Excitatory time constant: 5
+# Excitatory time delay: 1
+# Probability of inhibitory connection: 0.25
+# Minimal inhibitory weight: -0.02
+# Maximal inhibitory weight: -0.005
+# Inhibitory time constant: 5
+# Inhibitory time delay: 4
+# varphi_0: 0.01
+# varphi_k: 17
+# nu_bar: 0.2217
+# early_steps: 100
+# total_steps: 1000
+#
+# Generator type: cmrg
+# Seed = 18570705
+###########################################
+</pre>
+
+<p>
+We see here that the type and seed of the rng have changed (last two lines) compared to their default values.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline44" class="outline-3">
+<h3 id="orgheadline44"><span class="section-number-3">4.2</span> Checking that our code is doing what it is supposed to do</h3>
+<div class="outline-text-3" id="text-4-2">
+<p>
+We will write a program that simulates a network made of 2 neurons where neuron 1 excites neuron 2 and neuron 2 inhibits neuron 1. This program will output \(u_1\) and \(u_2\) (the pseudo membrane potential) of each neuron at each type step in addition to the spike trains. We will set the weight of the excitatory input to 1 and the one of the inhibitory to -4, while the steepness of the \(\varphi\) function is going to be set at 1. The simulation parameters are now contained in declarations (as opposed to passed as program parameters):
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock89">#define W_E 1.0
+#define W_I -4.0
+#define VARPHI_0 0.005
+#define VARPHI_K 1.0
+#define N_NEURONS 2
+#define TAU_E 10.0
+#define D_E 1
+#define TAU_I 25.0
+#define D_I 5
+#define NU_BAR 0.05
+#define EARLY_STEPS 1000
+#define TOTAL_STEPS 10000
+</pre>
+</div>
+
+<p>
+We start by modifying function <code>mk_one_step</code> such that the new function <code>mk_one_step_2n</code> takes two additional parameters, pointers to <code>gsl_vector</code> variables, that contain the membrane potential values:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock90">int mk_one_step_2n(int t,
+		   GArray **history,
+		   presynaptic **graph,
+		   sim_gl_params * params,
+		   gsl_rng * r,
+		   gsl_vector * u_0,
+		   gsl_vector * u_1)
+{
+  int res[N_NEURONS];
+  double u;
+  // Spike or no spike for each neuron
+  if (t &lt; EARLY_STEPS)
+    {
+      res[0] = spike_or_not_early(NU_BAR,r);
+      gsl_vector_set(u_0,(size_t) t,0.0);
+      res[1] = spike_or_not_early(NU_BAR,r);
+      gsl_vector_set(u_1,(size_t) t,0.0);
+    }
+  else
+    {
+      // Neuron 0
+      u = get_u_i(0, t, history, graph,
+		  TAU_E, D_E, TAU_I, D_I);
+      gsl_vector_set(u_0,(size_t) t,u);
+      if (gsl_ran_flat(r,0.0,1.0) &lt;= varphi(u, VARPHI_0, VARPHI_K))
+	res[0]=1;
+      else
+	res[0]=0;
+      // Neuron 1
+      u = get_u_i(1, t, history, graph,
+		  TAU_E, D_E, TAU_I, D_I);
+      gsl_vector_set(u_1,(size_t) t,u);
+      if (gsl_ran_flat(r,0.0,1.0) &lt;= varphi(u, VARPHI_0, VARPHI_K))
+	res[1]=1;
+      else
+	res[1]=0;
+    }
+  // Upate history
+  for (size_t n_idx = 0; n_idx &lt; N_NEURONS; n_idx++)
+    {
+      if (res[n_idx] == 1)
+	g_array_append_val(history[n_idx],t);
+    }
+  return 0;
+}
+</pre>
+</div>
+
+<p>
+We know define the program and save it in a file called <code>sim_2_neurons.c</code>. The output contains, in addition to the spike trains and after them, two columns with \(u_1\) and \(u_2\) (this is dealt with in function <code>write_sim_2n_results</code> defined bellow the <code>main</code> function, an adaptation of <code>write_sim_results</code>): 
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock91">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;getopt.h&gt;
+#include &lt;gsl/gsl_errno.h&gt;
+#include &lt;gsl/gsl_math.h&gt;
+#include &lt;gsl/gsl_vector.h&gt;
+#include &lt;gsl/gsl_vector_uint.h&gt;
+#include &lt;gsl/gsl_rng.h&gt;
+#include &lt;gsl/gsl_randist.h&gt;
+#include &lt;glib.h&gt;
+
+&lt;&lt;sim_2_neurons_params&gt;&gt;
+
+&lt;&lt;presynaptic&gt;&gt;
+
+int free_graph(presynaptic **graph, size_t n_neurons);
+
+GArray ** malloc_garrays2(size_t n_neurons);
+
+int free_garrays2(GArray ** history, size_t n_neurons);
+
+&lt;&lt;Schraudolph-exp&gt;&gt;
+
+&lt;&lt;sim_gl_params&gt;&gt;
+
+int write_sim_2n_results(size_t n_neurons, GArray **history,
+			 gsl_vector * u_0,
+			 gsl_vector * u_1);
+
+int write_sim_gl_preamble(sim_gl_params * params, gsl_rng * r);
+
+int mk_one_step_2n(int t,
+		   GArray **history,
+		   presynaptic **graph,
+		   sim_gl_params * params,
+		   gsl_rng * r,
+		   gsl_vector * u_0,
+		   gsl_vector * u_1);
+
+
+double varphi(double u, double varphi_0, double k);
+
+double get_u_i(size_t n_idx, int t,
+	       GArray **history, presynaptic **graph,
+	       double tau_e, size_t d_e,
+	       double tau_i, size_t d_i);
+
+int spike_or_not_early(double nu_bar,
+		       gsl_rng * r);
+
+double g_i(size_t delay, double tau_i, size_t d_i);
+
+double g_e(size_t delay, double tau_e, size_t d_e);
+
+gsl_vector * G_i(double tau_i, size_t d_i);
+
+gsl_vector * G_e(double tau_e, size_t d_e);
+
+int main(void)
+{
+  sim_gl_params params={
+    .n_neurons=N_NEURONS,.d_e=D_E, .d_i=D_I, .total_steps=TOTAL_STEPS,
+    .early_steps=EARLY_STEPS, .p_e=1.0, .p_i=1.0, .w_e_max=W_E,
+    .w_e_min=W_E, .w_i_max=W_I, .w_i_min=W_I, .varphi_0=VARPHI_0,
+    .varphi_k=VARPHI_K, .tau_e=TAU_E, .tau_i=TAU_I, .nu_bar=NU_BAR,
+    .G_e=G_e(TAU_E, D_E),.G_i=G_i(TAU_I, D_I) 
+  };
+
+  // Initialize RNG
+  const gsl_rng_type * T;
+  gsl_rng * r;
+  gsl_rng_env_setup();
+
+  T = gsl_rng_default;
+  r = gsl_rng_alloc (T);
+
+  // allocate memory for the network
+  presynaptic **graph = malloc(N_NEURONS*sizeof(presynaptic*));
+  graph[0] = malloc(sizeof(presynaptic));
+  graph[0]-&gt;size=1;
+  graph[0]-&gt;w = gsl_vector_alloc(1);
+  graph[0]-&gt;idx = gsl_vector_uint_alloc(1);
+  graph[1] = malloc(sizeof(presynaptic));
+  graph[1]-&gt;size=1;
+  graph[1]-&gt;w = gsl_vector_alloc(1);
+  graph[1]-&gt;idx = gsl_vector_uint_alloc(1);
+  // Initialize the network
+  gsl_vector_uint_set(graph[0]-&gt;idx,0,1);
+  gsl_vector_set(graph[0]-&gt;w,0,W_I);
+  gsl_vector_uint_set(graph[1]-&gt;idx,0,0);
+  gsl_vector_set(graph[1]-&gt;w,0,W_E);
+
+  // allocate vectors containing u_0 and u_1
+  gsl_vector * u_0 = gsl_vector_alloc(TOTAL_STEPS);
+  gsl_vector * u_1 = gsl_vector_alloc(TOTAL_STEPS);
+
+  // Allocate history
+  GArray **history = malloc_garrays2 (params.n_neurons);
+
+  // Write preamble
+  write_sim_gl_preamble(&amp;params, r);
+
+  // Do the job
+  for (int step_idx=0; step_idx &lt; (int) TOTAL_STEPS; step_idx++)
+    {
+      mk_one_step_2n(step_idx, history, graph, &amp;params,
+		     r, u_0, u_1);
+    }
+
+  // Write results
+  write_sim_2n_results(params.n_neurons, history, u_0, u_1);
+
+  // Free memory taken up by history
+  free_garrays2(history,params.n_neurons);
+
+  gsl_vector_free(u_0);
+  gsl_vector_free(u_1);
+  gsl_rng_free (r);
+  gsl_vector_free(params.G_e);
+  gsl_vector_free(params.G_i);
+  free_graph(graph, params.n_neurons);
+  exit (EXIT_SUCCESS);
+  
+}
+
+&lt;&lt;mk_one_step_2n&gt;&gt;
+
+int write_sim_2n_results(size_t n_neurons, GArray **history,
+			 gsl_vector * u_0,
+			 gsl_vector * u_1)
+{
+  for (size_t n_idx = 0; n_idx &lt; n_neurons; n_idx++)
+    {
+      fprintf(stdout,"# Start neuron %d with %d spikes\n",
+	      (int) n_idx, history[n_idx]-&gt;len);
+      for (size_t s_idx = 0; s_idx &lt; history[n_idx]-&gt;len; s_idx++)
+	{
+	  fprintf(stdout,"%d\n", g_array_index(history[n_idx],
+					       int,s_idx));
+	}
+      fprintf(stdout,"# End neuron %d\n",(int) n_idx);
+      fprintf(stdout,"\n");
+      fprintf(stdout,"\n");
+    }
+  fprintf(stdout,"# u_0\t u_1\n");
+  for (size_t t_idx=0; t_idx &lt; TOTAL_STEPS; t_idx++)
+    fprintf(stdout,"%10.5g\t %10.5g\n",gsl_vector_get(u_0,t_idx),
+	    gsl_vector_get(u_1,t_idx));
+  return 0;
+}
+
+&lt;&lt;write_sim_gl_preamble&gt;&gt;
+
+&lt;&lt;G_i&gt;&gt;
+
+&lt;&lt;G_e&gt;&gt;
+
+&lt;&lt;g_i&gt;&gt;
+
+&lt;&lt;g_e&gt;&gt;
+
+&lt;&lt;spike_or_not_early&gt;&gt;
+
+&lt;&lt;get_u_i&gt;&gt;
+
+&lt;&lt;varphi&gt;&gt;
+
+&lt;&lt;malloc_garrays2&gt;&gt;
+
+&lt;&lt;free_garrays2&gt;&gt;
+
+&lt;&lt;free_graph&gt;&gt;
+</pre>
+</div>
+
+<p>
+We compile the code with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock92">make P=sim_2_neurons
+</pre>
+</div>
+
+<pre class="example">
+cc `pkg-config --cflags glib-2.0` -g -Wall -O3 -std=gnu11     sim_2_neurons.c  `pkg-config --libs glib-2.0 gsl `  -o sim_2_neurons
+</pre>
+
+<p>
+We run the code with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock93">./sim_2_neurons &gt; sim_2_neurons_0.txt
+</pre>
+</div>
+
+<p>
+And we plot part of the result with:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-gnuplot" id="orgsrcblock94">set grid
+set xlabel "Time step"
+set ylabel ""
+set key bottom left
+plot [7300:7900] [-5:2] "sim_2_neurons_0.txt" \
+     index 2 u 0:1 title "u_0" w l lw 2,\
+     "" index 2 u 0:2 title "u_1" w l lw 2,\
+     "" index 0 u 1:(1.5) title "spikes of neuron 0" w impulses lw 2, \
+     "" index 1 u 1:(-1.5) title "spikes of neuron 1" w impulses lw 2
+</pre>
+</div>
+
+
+<div class="figure">
+<p><img src="sim_2_neurons_0_fig.png" alt="sim_2_neurons_0_fig.png" />
+</p>
+</div>
+
+<p>
+Here we see by chance a spike in both neurons at time step 7687, the excitatory effect of neuron 0 on neuron 1 is there and is curtailed everytime neuron 1 fires, the same goes for the longer lasting inhibitory effect of neuron 1 on neuron 0. As expected, we get fewer spikes from neuron 0:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock95">grep "# Start neuron 0" sim_2_neurons_0.txt
+</pre>
+</div>
+
+<pre class="example">
+# Start neuron 0 with 102 spikes
+</pre>
+
+<p>
+than from neuron 1:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-shell" id="orgsrcblock96">grep "# Start neuron 1" sim_2_neurons_0.txt
+</pre>
+</div>
+
+<pre class="example">
+# Start neuron 1 with 144 spikes
+</pre>
+
+<p>
+This part of the code seems to be doing its job.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgheadline45" class="outline-3">
+<h3 id="orgheadline45"><span class="section-number-3">4.3</span> Checking that our code is doing what it is supposed to do (2)</h3>
+<div class="outline-text-3" id="text-4-3">
+<p>
+We repeat what we just made but now neuron 1 excites and inhibits 0. The code is written in file <code>sim_2_neuronsB.c</code> and we just change lines 80-92 of <code>sim_2_neurons.c</code> for:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-C" id="orgsrcblock97">  graph[0] = malloc(sizeof(presynaptic));
+  graph[0]-&gt;size=2;
+  graph[0]-&gt;w = gsl_vector_alloc(2);
+  graph[0]-&gt;idx = gsl_vector_uint_alloc(2);
+  graph[1] = malloc(sizeof(presynaptic));
+  graph[1]-&gt;size=1;
+  graph[1]-&gt;w = gsl_vector_alloc(1);
+  graph[1]-&gt;idx = gsl_vector_uint_alloc(1);
+  // Initialize the network
+  gsl_vector_uint_set(graph[0]-&gt;idx,0,1);
+  gsl_vector_set(graph[0]-&gt;w,0,W_I);
+  gsl_vector_uint_set(graph[0]-&gt;idx,1,1);
+  gsl_vector_set(graph[0]-&gt;w,1,W_E);
+  gsl_vector_uint_set(graph[1]-&gt;idx,0,0);
+  gsl_vector_set(graph[1]-&gt;w,0,W_E);
+</pre>
+</div>
+
+<p>
+We get a portion of the simulated data looking like: 
+</p>
+
+
+<div class="figure">
+<p><img src="sim_2_neuronsB_0_fig.png" alt="sim_2_neuronsB_0_fig.png" />
+</p>
+</div>
+</div>
+</div>
+</div>
+<div id="footnotes">
+<h2 class="footnotes">Footnotes: </h2>
+<div id="text-footnotes">
+
+<div class="footdef"><sup><a id="fn.1" class="footnum" href="#fnr.1">1</a></sup> <div class="footpara"><p class="footpara">
+The <i>antennal lobe</i> is the first olfactory relay of the insects, it is the equivalent of the <i>olfactory bulb</i> of the vertebrates.
+</p></div></div>
+
+<div class="footdef"><sup><a id="fn.2" class="footnum" href="#fnr.2">2</a></sup> <div class="footpara"><p class="footpara">
+Laurent G. (1996) Dynamical representation of odors by oscillating and evolving neural assemblies. <i>TINS</i> <b>19</b>: 489-496.
+</p></div></div>
+
+<div class="footdef"><sup><a id="fn.3" class="footnum" href="#fnr.3">3</a></sup> <div class="footpara"><p class="footpara">
+Boeckh, J. and Ernst, K.-D. (1987) Contribution of single unit analysis in insects to an understanding of olfactory function. <i>J Comp Physiol A</i> <b>161</b>: 549-565.
+</p></div></div>
+
+<div class="footdef"><sup><a id="fn.4" class="footnum" href="#fnr.4">4</a></sup> <div class="footpara"><p class="footpara">
+Nicol L. Schraudolph (1999) <a href="http://nic.schraudolph.org/bib2html/b2hd-Schraudolph99.html">A Fast, Compact Approximation of the Exponential Function</a> <i>Neural Computation</i> <b>11(4)</b>: 853-862.
+</p></div></div>
+
+
+</div>
+</div></div>
+<div id="postamble" class="status">
+<p class="author">Author: Christophe Pouzat</p>
+<p class="date">Created: 2016-09-08 jeu. 09:32</p>
+<p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
+</div>
+</body>
+</html>

@@ -1,0 +1,3613 @@
+# -*- ispell-local-dictionary: "american" -*-
+#+OPTIONS: ':nil *:t -:t ::t <:t H:3 \n:nil ^:nil arch:headline
+#+OPTIONS: author:t c:nil creator:nil d:(not "LOGBOOK") date:t e:t
+#+OPTIONS: email:nil f:t inline:t num:t p:nil pri:nil prop:nil stat:t
+#+OPTIONS: tags:t tasks:t tex:t timestamp:t title:t toc:t todo:t |:t
+#+TITLE: A "Simple" Simulator for the Galves-Löcherbach Model
+#+AUTHOR: Christophe Pouzat
+#+EMAIL: christophe.pouzat@parisdescartes.fr
+#+LANGUAGE: en
+#+SELECT_TAGS: export
+#+EXCLUDE_TAGS: noexport
+#+CREATOR: Emacs 24.5.1 (Org mode 8.3.4)
+#+LaTeX_CLASS: koma-article
+#+LaTeX_CLASS_OPTIONS: [koma,10pt,garamond]
+#+LaTeX_HEADER: \usepackage{alltt}
+#+LaTeX_HEADER: \usepackage[usenames,dvipsnames]{xcolor}
+#+LaTeX_HEADER: \renewenvironment{verbatim}{\begin{alltt} \scriptsize \color{Bittersweet} \vspace{0.2cm} }{\vspace{0.2cm} \end{alltt} \normalsize \color{black}}
+#+LaTeX_HEADER: \usepackage{listings}
+#+LaTeX_HEADER: \lstloadlanguages{C,Gnuplot,bash,sh}
+#+LaTeX_HEADER: \hypersetup{colorlinks=true} 
+
+#+NAME: org-latex-set-up
+#+BEGIN_SRC emacs-lisp :results silent :exports none
+(require 'ox-latex)
+(setq org-export-latex-listings t)
+(setq org-latex-listings 'listings)
+(setq org-latex-listings-options
+        '(("frame" "lines")
+          ("basicstyle" "\\footnotesize")
+          ("numbers" "left")
+          ("numberstyle" "\\tiny")))
+(add-to-list 'org-latex-classes
+          '("koma-article"
+             "\\documentclass{scrartcl}"
+             ("\\section{%s}" . "\\section*{%s}")
+             ("\\subsection{%s}" . "\\subsection*{%s}")
+             ("\\subsubsection{%s}" . "\\subsubsection*{%s}")
+             ("\\paragraph{%s}" . "\\paragraph*{%s}")
+             ("\\subparagraph{%s}" . "\\subparagraph*{%s}")))
+#+END_SRC
+
+* Introduction
+
+** Basic numbers and data features
+
+We want to write a simulator in =C= for the Galves-Löcherbach Model in order to generate test data for the [[http://arxiv.org/abs/1604.00419][Duarte et al (2016)]] inference algorithm. Since the inference will later on be applied to the [[https://zenodo.org/record/21589][locust antennal lobe]][fn:AntennalLobe] data sets, we are going to try to simulate data that more or less look like the real ones. From this view point the following features will be considered[fn:Laurent96]:
+- There are 830 /projection neurons/ (PN) in the antennal lobe, these neurons are excitatory (cholinergic) and fire sodium dependent, propagated, action potentials (that is, classical action potentials).
+- There are 300 /local neurons/ (LN) in this structure; they are inhibitory (gabaergic) and fire calcium dependent, /local/, action potentials.
+- The extracellular recordings used to get the data we are going to work on /do not catch the calcium spikes of the LN/, we therefore see a single cell type, the PN.
+It makes sense to model / simulate only the PN population using "a trick": /both excitatory and inhibitory/ are allowed between PNs. The inhibitory connections are functional ones as opposed to an anatomical one, they are due to one or several interposed LNs[fn:BoeckErnst87] that are not simulated.
+
+** Synaptic weights, leak functions and function $\varphi$
+Adopting the framework and the notations of [[http://arxiv.org/abs/1604.00419][Duarte et al (2016) ]]we will be dealing with two populations of synaptic weights ($W_{j\rightarrow i}$) one with relatively small (in absolute value) negative values corresponding to inhibitory coupling (via an interposed LN) and another one with relatively large positive values corresponding to direct excitatory coupling. We will start with a uniform and "large" probability of inhibitory coupling and a uniform and "small" probability of excitatory, coupling. 
+
+*** $\varphi$
+
+The functions $\varphi_i$ in equations 2.2 and 2.3 in Duarte et al 2016 are going to be the same with the following form depending on two parameters, $\varphi_0$ and $k$, set at the beginning of each simulation:
+\[\varphi(u) = \varphi_0 + \mathrm{H}(u) (1-\varphi_0) \left(1-\exp(-u/k)\right)^2 \, , \]
+where $\mathrm{H}(u)$ stands for [[https://en.wikipedia.org/wiki/Heaviside_step_function][Heaviside step function]] (equal to zero for negative $u$ and 1 otherwise). If I'm not mistaken, the parameter $\gamma$ of assumption 1 is then:
+\[\gamma = \frac{1-\varphi_0}{2 k} \, .\]
+
+#+NAME: get-γ-with-maxima
+#+BEGIN_SRC maxima :exports none :results output
+print(subst(solve(diff(phi_0+(1-phi_0)*(1-exp(-x/k))^2,x,2),x)[1],diff(phi_0+(1-phi_0)*(1-exp(-x/k))^2,x)));
+#+END_SRC
+
+#+RESULTS: get-γ-with-maxima
+: 1 - phi_0
+: --------- 
+:    2 k
+
+*** Synaptic leak functions
+We are going to work with two types of "synaptic leak" functions---the $g_i(\,)$ ---one for excitatory and one for inhibitory inputs. The excitatory one will be:
+\[g_e(t) = \exp\left(-(t-d_e)/\tau_e\right) \quad \text{for} \quad t \ge d_e \, ,\]
+where $d_e$ stands for the synaptic delay and $\tau_e$ the synaptic time constant. For the inhibitory inputs we are going to use what modelers (in neuroscience) call an alpha function:
+\[g_i(t) = \frac{t-d_i}{\tau_i} \exp \left( 1- \frac{t-d_i}{\tau_i}\right) \quad \text{for} \quad t \ge d_i \, .\]
+
+The graph of this function looks like (I'm using [[http://www.gnuplot.info/][gnuplot]] to prepare the figures in this document and I include the codes generating the figures):
+
+#+NAME: set-gnuplot-pars
+#+BEGIN_SRC gnuplot :session *gnuplot* :exports none
+set terminal pngcairo size 800,800
+#+END_SRC
+
+#+RESULTS: set-gnuplot-pars
+
+#+NAME: alpha-function-graph
+#+BEGIN_SRC gnuplot :session *gnuplot* :file alpha_function_graph.png :exports both
+set xlabel "Time since presynaptic spike"
+set ylabel "Relative synaptic conductance"
+plot [0:50] [0:1] (x-1)/5*exp(1-(x-1)/5) lw 2 lc rgb "black"
+#+END_SRC
+
+#+RESULTS: alpha-function-graph
+[[file:alpha_function_graph.png]]
+
+** Required software
+
+The code will be written in =C=. If you want a clear and quick introduction to this language, check Ben Klemens: [[http://modelingwithdata.org/about_the_book.html][Modeling With Data]]. To compile the code you will need a =C= compiler like [[https://gcc.gnu.org/][gcc]]. If you are using =Linux= or =MacOS= it's in a package from your favorite distribution, if you are using =Windows= you will have to install [[https://cygwin.com/index.html][Cygwin]]. The heavy computational work is going to be performed mainly by the [[http://www.gnu.org/software/gsl/][gsl]] (the /GNU Scientific Library/) that is easily installed through your package manager (from now on, for windows users, the "package manager" refers to the one of =Cygwin=). We are going to make extensive use of "variable length" arrays, where the spike times of our simulated neurons are going to be stored---and we do not know when we start a simulation how many spikes each neuron is going to fire---; we will use the =GArray= data type from [[http://www.ibm.com/developerworks/linux/tutorials/l-glib/][libglib]], a library that should be available from the package manager on Linux and MacOS and that is available from Cygwin's package manager for Windows. The graphs will be generated with [[http://www.gnuplot.info/][gnuplot]] as you just saw.
+
+* Code
+** A remark on the code presentation
+The [[https://en.wikipedia.org/wiki/Literate_programming][literate programming]] approach is used here. This means that the code is broken into "manageable" pieces that are individually explained, they are then pasted together to give the code that will actually get compiled. These manageable pieces are called blocs and each bloc gets a name like: =<<name-of-the-bloc>>= upon definition. It is then referred to by this name when used in subsequent codes. See Schulte, Davison, Dye and Dominik (2010) [[https://www.jstatsoft.org/article/view/v046i03][A Multi-Language Computing Environment for Literate Programming and Reproducible Research ]]for further explanations.
+
+** $W_{j\rightarrow i}$ generation
+
+We are going to start with a simple scheme for each pair $(j,i)$ where $j$ is presynaptic and $i$ is postsynaptic we:
+
+1. Draw a (pseudo-)random number with a uniform distribution on $[0,1)$; if this number is larger than =p_i= (a parameter of our program) then we go to 2, otherwise we "create" an inhibitory connection between $j$ and $i$ and we draw it weight uniformly between =w_i_min= and =w_i_max= (both < 0 and parameters of the program).
+2. Draw a random number with a uniform distribution on $[0,1)$; if this number is larger than =p_e= (a parameter of our program) then we go to the next pair, otherwise we "create" an excitatory connection between $j$ and $i$ and we draw it weight uniformly between =w_e_min= and =w_e_max= (both > 0 and parameters of the program) and we go to the next pair.
+  
+** Bookkeeping
+
+Each neuron is going to  be uniquely identified by it's index, an integer running from 0 to I-1. Two arrays and an unsigned integer (a =size_t=) are going to be associated to each neuron:
+- The unsigned integer contains the number of presynaptic connections (excitatory + inhibitory). We will call =size= this element.
+- An array of unsigned integers (I'm referring here to the corresponding [[https://en.wikipedia.org/wiki/C_syntax#Primitive_data_types][C types]]) containing the indices of its presynaptic neurons. We will call this array =idx= and it will be a pointer to a [[https://www.gnu.org/software/gsl/manual/html_node/Vectors.html#Vectors][gsl_vector_uint]].
+- An array of reals (=double= in =C= terminology) containing the corresponding $W_{j\rightarrow i}$ values (< 0 for inhibitory connections and > 0 for excitatory ones). We will call this array =w= and it will be pointer to a [[https://www.gnu.org/software/gsl/manual/html_node/Vectors.html#Vectors][gsl_vector]] (we do not need an extension like the =_uint= above, since the =gsl_vector= is of type =double= by default). 
+
+Notice that with these choices a single neuron can appear twice in =idx= because it could form a (direct) excitatory connection and an indirect (via a =LN=) inhibitory connection with the considered neuron. /This is a peculiarity of the network we are modeling here and not a general property of actual networks/ (in general the contrary is true).
+
+In =C= the logical step is then to define a new type containing different elements, that is a new [[https://en.wikipedia.org/wiki/C_syntax#Structures_and_unions][structure]] that we will call =presynaptic= and that is declared as follows:
+
+#+NAME: presynaptic
+#+BEGIN_SRC C :eval never
+typedef struct
+{
+  size_t size;
+  gsl_vector_uint * idx;
+  gsl_vector * w; 
+} presynaptic;
+#+END_SRC 
+
+** Connection graph generation and associated functions
+
+*** =mk_graph=
+We can now define a =C= function that creates a random graph following the above prescription. This function takes 8 parameters:
+- *n_neurons* (size_t---a type of unsigned integer used for indexing---): the number of neurons in the network.
+- *p_e* (double): the probability of excitatory connection.
+- *w_e_min* (double): the minimal excitatory weight.
+- *w_e_max* (double): the maximal excitatory weight.  
+- *p_i* (double): the probability of inhibitory connection.
+- *w_i_min* (double): the minimal inhibitory weight.
+- *w_i_max* (double): the maximal inhibitory weight.
+- *r* (a pointer to a [[https://www.gnu.org/software/gsl/manual/html_node/Random-number-generator-initialization.html#Random-number-generator-initialization][gsl_rng]]): a pointer on an allocated =gsl_rng=.
+The function returns a pointer to a pointer to =presynaptic= structures is everything goes fine and a =NULL= pointer otherwise (together with a message printed on the =stderr=).
+
+#+NAME: mk_graph
+#+BEGIN_SRC C :eval never
+presynaptic ** mk_graph(size_t n_neurons,
+			double p_e, double w_e_min, double w_e_max,
+			double p_i, double w_i_min, double w_i_max,
+			gsl_rng * r)
+{
+  // Check that the parameters are correct
+  if (p_e < 0 || p_e > 1)
+    {
+      fprintf(stderr,"We must have 0 <= p_e <= 1.\n");
+      return NULL;
+    }
+  if (p_i < 0 || p_i > 1)
+    {
+      fprintf(stderr,"We must have 0 <= p_i <= 1.\n");
+      return NULL;
+    }
+  if (w_e_min <= 0 || w_e_max <= 0)
+    {
+      fprintf(stderr,"Excitatory weights must be > 0.\n");
+      return NULL;
+    }
+  if (w_e_min >= w_e_max)
+    {
+      fprintf(stderr,"We must have w_e_min < w_e_max.\n");
+      return NULL;
+    }
+  if (w_i_min >= 0 || w_i_max >= 0)
+    {
+      fprintf(stderr,"Inhibitory weights must be < 0.\n");
+      return NULL;
+    }
+  if (w_i_min >= w_i_max)
+    {
+      fprintf(stderr,"We must have w_i_min < w_i_max.\n");
+      return NULL;
+    }
+  // allocate memory for the result
+  presynaptic **graph = malloc(n_neurons*sizeof(presynaptic*));
+  for (size_t n_idx=0; n_idx < n_neurons; n_idx++)
+    { // For each postsynaptic neuron
+      uint idx[n_neurons*2];
+      double w[n_neurons*2];
+      size_t n=0; // counts the number of actual connections
+      for (size_t pre_idx=0; pre_idx < n_neurons; pre_idx++)
+	{ // For each potential presynaptic neuron
+	  if (pre_idx == n_idx) continue; // No autapses!
+	  if(gsl_ran_flat(r,0.0,1.0) <= p_e)
+	    {// there is an excitatory connection
+	      idx[n]=pre_idx; // add it to the list
+	      w[n]=gsl_ran_flat(r,w_e_min,w_e_max); // draw its weight
+	      n++; // increase n by 1
+	    }
+	  if(gsl_ran_flat(r,0.0,1.0) <= p_i)
+	    {// there is an inhibitory connection
+	      idx[n]=pre_idx; // add it to the list
+	      w[n]=gsl_ran_flat(r,w_i_min,w_i_max); // draw its weight
+	      n++; // increase n by 1
+	    }
+	} // End of loop on each potential presynaptic neuron
+      // Initialize the presynaptic structure for neuron n_idx
+      // Start by allocating the required memory
+      graph[n_idx] = malloc(sizeof(presynaptic));
+      graph[n_idx]->size=n;
+      if (n > 0)
+	{
+	 graph[n_idx]->w = gsl_vector_alloc(n);
+	 graph[n_idx]->idx = gsl_vector_uint_alloc(n);
+	 // Assign values
+	 for (size_t pre_idx=0; pre_idx < n; pre_idx++)
+	   {
+	     gsl_vector_uint_set(graph[n_idx]->idx,pre_idx,idx[pre_idx]);
+	     gsl_vector_set(graph[n_idx]->w,pre_idx,w[pre_idx]);
+	   } 
+	}
+    }
+  return graph;
+}
+#+END_SRC  
+
+Notice that with this definition, if a presynaptic neuron makes two connections with a postsynaptic one (an excitatory /and/ an inhibitory) the corresponding weights are one after the other in the corresponding =w= element of the =presynaptic= structure. This will be exploited when the spike trains will be generated.
+
+*** =free_graph=
+
+Since function =mk_graph= allocates memory, we have to free this memory before leaving our program; this will be the job of =free_graph=. It takes a two parameters: 
+- *graph* (pointer to pointer to =presynapic=).
+- *n_neurons* (size_t): the number of neurons.
+It returns 0 if everything goes fine.
+
+#+NAME: free_graph
+#+BEGIN_SRC C :eval never
+int free_graph(presynaptic **graph, size_t n_neurons)
+{
+  for (size_t n_idx=0; n_idx<n_neurons; n_idx++)
+    {
+      if (graph[n_idx]->size > 0)
+	{
+	  gsl_vector_free(graph[n_idx]->w);
+	  gsl_vector_uint_free(graph[n_idx]->idx);
+	}
+      free(graph[n_idx]);
+      }
+  free(graph);
+  return 0;
+}
+#+END_SRC
+
+*** =print_graph=
+
+To facilitate testing, we define function =print_graph= that prints to the =stdout= the graph with one "paragraph" per postsynaptic neuron, starting with a line =Postsynaptic neuron: i= and followed by as many lines as connections, each of those line being built following this scheme:
+- =W(j -> i) = value=, where =j= and =i= are integers and where =value= is a real.
+One blank line is left between paragraphs. The functions takes the same arguments as function =free_graph=.
+
+#+NAME: print_graph
+#+BEGIN_SRC C :eval never
+int print_graph(presynaptic **graph, size_t n_neurons)
+{
+  for (size_t n_idx=0; n_idx<n_neurons; n_idx++)
+    {
+      fprintf(stdout,"Postsynaptic neuron: %d\n",(int) n_idx);
+      if (graph[n_idx]->size > 0)
+	{
+	 for (size_t pre_idx=0; pre_idx<graph[n_idx]->size; pre_idx++)
+	   {
+	     fprintf(stdout,"\t W(%d -> %d) = %g\n",
+		     (int) gsl_vector_uint_get(graph[n_idx]->idx,pre_idx),
+		     (int) n_idx,
+		     gsl_vector_get(graph[n_idx]->w,pre_idx)); 
+	       
+	   } 
+	}
+      fprintf(stdout,"\n");
+    }
+  return 0;
+}
+#+END_SRC
+ 
+*** Test code
+
+We now write a program that tests our collection of functions. This program takes from the command line the following parameters:
+
+- *n_neurons*: the number of neurons in the network.
+- *p_e*: the probability of excitatory connection (default set at 0.1).
+- *w_e_min*: the minimal weight of excitatory connections (default set at 0.2).
+- *w_e_max*: the maximal weight of excitatory connections (default set at 0.4).
+- *p_i*: the probability of inhibitory connection (default set at 0.2).
+- *w_i_min*: the minimal weight of inhibitory connections (default set at -0.1).
+- *w_i_max*: the maximal weight of inhibitory connections (default set at -0.05).
+
+#+NAME: test_graph
+#+BEGIN_SRC C :tangle test_graph.c :noweb no-export
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <getopt.h>
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_vector_uint.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+
+<<presynaptic>>
+
+presynaptic ** mk_graph(size_t n_neurons,
+			double p_e, double w_e_min, double w_e_max,
+			double p_i, double w_i_min, double w_i_max,
+			gsl_rng * r);
+
+int free_graph(presynaptic **graph, size_t n_neurons);
+
+int print_graph(presynaptic **graph, size_t n_neurons);
+
+void print_usage_test_graph();
+
+int read_args_test_graph(int argc, char ** argv,
+			 size_t * n_neurons,
+			 double * p_e, double * w_e_min, double * w_e_max,
+			 double * p_i, double * w_i_min, double * w_i_max);
+
+int main(int argc, char ** argv)
+{
+  size_t n_neurons;
+  double p_e, w_e_min, w_e_max;
+  double p_i, w_i_min, w_i_max;
+
+  int status = read_args_test_graph(argc, argv, &n_neurons,
+				    &p_e, &w_e_min, &w_e_max,
+				    &p_i, &w_i_min, &w_i_max);
+
+  if (status == -1) exit (EXIT_FAILURE);
+  
+  const gsl_rng_type * T;
+  gsl_rng * r;
+  gsl_rng_env_setup();
+
+  T = gsl_rng_default;
+  r = gsl_rng_alloc (T);
+
+  presynaptic **graph=mk_graph(n_neurons,
+			       p_e, w_e_min, w_e_max,
+			       p_i, w_i_min, w_i_max,
+			       r);
+  gsl_rng_free (r);
+  print_graph(graph, n_neurons);
+  free_graph(graph, n_neurons);
+  exit (EXIT_SUCCESS); 
+}
+
+<<mk_graph>>
+
+<<free_graph>>
+
+<<print_graph>>
+
+<<print_usage_test_graph>>
+
+<<read_args_test_graph>>
+#+END_SRC
+
+The =<<print_usage_test_graph>>= function is defined next:
+
+#+NAME: print_usage_test_graph
+#+BEGIN_SRC C :eval never
+void print_usage_test_graph() {
+  printf("Usage: \n"
+	 "  --n_neurons <positive integer>: the number of neurons in the "
+	 "network\n"
+	 "  --p_e <double in (0,1)>: the probability of excitatory "
+	 "connection between two neurons\n"
+	 "  --w_e_min <positive double>: the minimal excitatory synaptic "
+	 "weight\n"
+	 "  --w_e_min <positive double>: the maximal excitatory synaptic "
+	 "weight\n"
+	 "  --p_i <double in (0,1)>: the probability of inhibitory "
+	 "connection between two neurons\n"
+	 "  --w_i_min <negative double>: the minimal inhibitory synaptic "
+	 "weight\n"
+	 "  --w_i_max <negative double>: the maximal inhibitory synaptic "
+	 "weight\n"
+	 "\n"
+	 "The connection probalities are uniform. The synaptic weights "
+	 "are drawn from\n"
+	 "uniform distributions.\n"
+	 "The rng seed can be set through the GSL_RNG_SEED environment "
+	 "variable.\n"
+	 "The rng type can be set through the GSL_RNG_TYPE environment "
+	 "variable.\n");
+}
+#+END_SRC
+
+The =<<read_args_test_graph>>= is now defined:
+
+#+NAME: read_args_test_graph
+#+BEGIN_SRC C :eval never
+int read_args_test_graph(int argc, char ** argv,
+			 size_t * n_neurons,
+			 double * p_e, double * w_e_min, double * w_e_max,
+			 double * p_i, double * w_i_min, double * w_i_max)
+{
+  if (argc == 1) {
+    print_usage_test_graph();
+    return -1;
+  }
+  // Define default values
+  ,*p_e = 0.1;
+  ,*w_e_min = 0.2;
+  ,*w_e_max = 0.4;
+  ,*p_i = 0.2;
+  ,*w_i_min = -0.1;
+  ,*w_i_max = -0.05;
+  {int opt;
+    static struct option long_options[] = {
+      {"n_neurons",required_argument,NULL,'n'},
+      {"p_e",optional_argument,NULL,'a'},
+      {"w_e_min",optional_argument,NULL,'b'},
+      {"w_e_max",optional_argument,NULL,'c'},
+      {"p_i",optional_argument,NULL,'d'},
+      {"w_i_min",optional_argument,NULL,'e'},
+      {"w_i_max",optional_argument,NULL,'f'},
+      {"help",no_argument,NULL,'h'},
+      {NULL,0,NULL,0}
+    };
+    int long_index =0;
+    while ((opt = getopt_long(argc,argv,"hn:a:b:c:d:e:f:",long_options,\
+			      &long_index)) != -1) {
+      switch(opt) {
+      case 'n':
+	{
+	  int n=atoi(optarg);
+	  if (n <= 0)
+	    {
+	      fprintf(stderr,"The number of neurons should be > 0.\n");
+	      return -1;
+	    }
+	  ,*n_neurons=(size_t) n; 
+	}
+	break;
+      case 'a': *p_e=atof(optarg);
+	break;
+      case 'b': *w_e_min=atof(optarg);
+	break;
+      case 'c': *w_e_max=atof(optarg);
+	break;
+      case 'd': *p_i=atof(optarg);
+	break;
+      case 'e': *w_i_min=atof(optarg);
+	break;
+      case 'f': *w_i_max=atof(optarg);
+	break;
+      case 'h': print_usage_test_graph();
+	return -1;
+      default : print_usage_test_graph();
+	return -1;
+      }
+    }
+  }
+  // Check that the parameters are correct
+  if (*p_e < 0 || *p_e > 1)
+    {
+      fprintf(stderr,"We must have 0 <= p_e <= 1.\n");
+      return -1;
+    }
+  if (*p_i < 0 || *p_i > 1)
+    {
+      fprintf(stderr,"We must have 0 <= p_i <= 1.\n");
+      return -1;
+    }
+  if (*w_e_min <= 0 || *w_e_max <= 0)
+    {
+      fprintf(stderr,"Excitatory weights must be > 0.\n");
+      return -1;
+    }
+  if (*w_e_min >= *w_e_max)
+    {
+      fprintf(stderr,"We must have w_e_min < w_e_max.\n");
+      return -1;
+    }
+  if (*w_i_min >= 0 || *w_i_max >= 0)
+    {
+      fprintf(stderr,"Inhibitory weights must be < 0.\n");
+      return -1;
+    }
+  if (*w_i_min >= *w_i_max)
+    {
+      fprintf(stderr,"We must have w_i_min < w_i_max.\n");
+      return -1;
+    }
+  return 0;
+}
+#+END_SRC
+
+To facilitate compilation we define a =makefile= that we save in a file called =Makefile=:
+
+#+NAME: Makefile
+#+BEGIN_SRC makefile  
+P=programe_name
+OBJECTS=
+CFLAGS= -g -Wall -O3 -std=gnu11
+LDLIBS= `pkg-config --libs gsl` 
+
+$(P): $(OBJECTS)
+
+#+END_SRC
+
+The compilation is then done with the command:
+
+#+NAME: compile-test_graph
+#+BEGIN_SRC shell :exports both :results output
+make P=test_graph
+#+END_SRC
+
+#+RESULTS: compile-test_graph
+: cc -g -Wall -O3 -std=gnu11    test_graph.c  `pkg-config --libs gsl`  -o test_graph
+
+A first test is done with:
+
+#+NAME: test_graph_1
+#+BEGIN_SRC shell :exports both :results output
+./test_graph --n_neurons 8
+#+END_SRC
+
+#+RESULTS: test_graph_1
+#+begin_example
+Postsynaptic neuron: 0
+	 W(1 -> 0) = -0.0858691
+
+Postsynaptic neuron: 1
+	 W(3 -> 1) = -0.083323
+	 W(7 -> 1) = -0.0851737
+
+Postsynaptic neuron: 2
+	 W(0 -> 2) = -0.0675937
+	 W(3 -> 2) = -0.0650366
+	 W(4 -> 2) = -0.0748798
+	 W(6 -> 2) = 0.225625
+	 W(7 -> 2) = 0.258428
+
+Postsynaptic neuron: 3
+	 W(2 -> 3) = -0.077959
+	 W(4 -> 3) = 0.262259
+
+Postsynaptic neuron: 4
+	 W(2 -> 4) = 0.267746
+	 W(2 -> 4) = -0.0781729
+	 W(7 -> 4) = -0.0627957
+
+Postsynaptic neuron: 5
+	 W(2 -> 5) = 0.322613
+	 W(4 -> 5) = -0.0844606
+
+Postsynaptic neuron: 6
+	 W(3 -> 6) = -0.0938533
+	 W(4 -> 6) = 0.364014
+	 W(4 -> 6) = -0.0842127
+	 W(5 -> 6) = -0.0667785
+	 W(7 -> 6) = -0.0781828
+
+Postsynaptic neuron: 7
+
+#+end_example
+
+A second test is done with:
+
+#+NAME: test_graph_2
+#+BEGIN_SRC shell :exports both :results output
+./test_graph --n_neurons=8 --p_e=1.0
+#+END_SRC
+
+#+RESULTS: test_graph_2
+#+begin_example
+Postsynaptic neuron: 0
+	 W(1 -> 0) = 0.232582
+	 W(2 -> 0) = 0.246331
+	 W(3 -> 0) = 0.348861
+	 W(4 -> 0) = 0.351989
+	 W(5 -> 0) = 0.360881
+	 W(6 -> 0) = 0.295106
+	 W(7 -> 0) = 0.242638
+	 W(7 -> 0) = -0.083323
+
+Postsynaptic neuron: 1
+	 W(0 -> 1) = 0.388743
+	 W(2 -> 1) = 0.333113
+	 W(3 -> 1) = 0.236457
+	 W(4 -> 1) = 0.212584
+	 W(5 -> 1) = 0.327426
+	 W(6 -> 1) = 0.339853
+	 W(6 -> 1) = -0.0935379
+	 W(7 -> 1) = 0.241556
+
+Postsynaptic neuron: 2
+	 W(0 -> 2) = 0.225625
+	 W(1 -> 2) = 0.258428
+	 W(3 -> 2) = 0.286369
+	 W(3 -> 2) = -0.0799804
+	 W(4 -> 2) = 0.234134
+	 W(5 -> 2) = 0.262259
+	 W(6 -> 2) = 0.302206
+	 W(7 -> 2) = 0.232162
+
+Postsynaptic neuron: 3
+	 W(0 -> 3) = 0.335521
+	 W(1 -> 3) = 0.218022
+	 W(2 -> 3) = 0.287308
+	 W(4 -> 3) = 0.355507
+	 W(5 -> 3) = 0.274086
+	 W(6 -> 3) = 0.348817
+	 W(7 -> 3) = 0.324391
+
+Postsynaptic neuron: 4
+	 W(0 -> 4) = 0.322613
+	 W(1 -> 4) = 0.34476
+	 W(1 -> 4) = -0.0978848
+	 W(2 -> 4) = 0.224328
+	 W(3 -> 4) = 0.288026
+	 W(5 -> 4) = 0.286525
+	 W(6 -> 4) = 0.328473
+	 W(7 -> 4) = 0.224587
+	 W(7 -> 4) = -0.0589964
+
+Postsynaptic neuron: 5
+	 W(0 -> 5) = 0.263149
+	 W(0 -> 5) = -0.0928886
+	 W(1 -> 5) = 0.337038
+	 W(1 -> 5) = -0.0781828
+	 W(2 -> 5) = 0.373633
+	 W(2 -> 5) = -0.0757779
+	 W(3 -> 5) = 0.380095
+	 W(3 -> 5) = -0.0660182
+	 W(4 -> 5) = 0.396731
+	 W(6 -> 5) = 0.398969
+	 W(7 -> 5) = 0.327789
+
+Postsynaptic neuron: 6
+	 W(0 -> 6) = 0.238319
+	 W(1 -> 6) = 0.399345
+	 W(1 -> 6) = -0.067423
+	 W(2 -> 6) = 0.277996
+	 W(3 -> 6) = 0.322041
+	 W(4 -> 6) = 0.335543
+	 W(5 -> 6) = 0.216277
+	 W(5 -> 6) = -0.07604
+	 W(7 -> 6) = 0.294396
+
+Postsynaptic neuron: 7
+	 W(0 -> 7) = 0.266911
+	 W(1 -> 7) = 0.330709
+	 W(2 -> 7) = 0.219985
+	 W(3 -> 7) = 0.248228
+	 W(4 -> 7) = 0.284679
+	 W(5 -> 7) = 0.373768
+	 W(5 -> 7) = -0.0917077
+	 W(6 -> 7) = 0.321291
+
+#+end_example
+
+** Bookkeeping again
+Now that we have a defined network to simulate we have to decide how this network activity, that is the spike trains of each neuron, are going to be stored. The "nasty" part is that we do not know at the start (of the simulation) how many spikes each neuron is going to generate. This could orient us to a [[https://en.wikipedia.org/wiki/Linked_list][linked list]] storage but we should keep in mind that we will have to "visit" the spike trains of each neuron at each time step of the simulation; we therefore want something like an extensible memory with fast access. A quick and clean way to get that is using the =Glib Array= type [[http://www.ibm.com/developerworks/linux/tutorials/l-glib/][GArray]]. 
+
+*** A test with =Glib= 
+
+In order to make sure that our =Glib= set up is fine, let us try the first example of the =Basic operations of arrays= from the [[http://www.ibm.com/developerworks/linux/tutorials/l-glib/][IBM tutorial]] we referred to before. We write the following code in a file named =ex-garray-1.c=:
+
+#+NAME: Glib-example-1
+#+BEGIN_SRC C :tangle ex-garray-1.c
+#include <glib.h>
+#include <stdio.h>
+int main(int argc, char** argv) {
+ GArray* a = g_array_new(FALSE, FALSE, sizeof(char*));
+ char* first = "hello", *second = "there", *third = "world";
+ g_array_append_val(a, first);
+ g_array_append_val(a, second);
+ g_array_append_val(a, third);
+ printf("There are now %d items in the array\n", a->len);
+ printf("The first item is '%s'\n", g_array_index(a, char*, 0));
+ printf("The third item is '%s'\n", g_array_index(a, char*, 2));
+ g_array_remove_index(a, 1);
+ printf("There are now %d items in the array\n", a->len);
+ g_array_free(a, FALSE);
+ return 0;
+}
+#+END_SRC
+
+We compile it with (adapted from the top of the same document):
+
+#+NAME: Glib-example-1-compile
+#+BEGIN_SRC shell :exports both
+gcc `pkg-config --cflags --libs glib-2.0` -o ex-garray-1 ex-garray-1.c
+#+END_SRC
+
+#+RESULTS: Glib-example-1-compile
+
+And we run it with:
+
+#+NAME: Glib-example-1-run
+#+BEGIN_SRC shell :exports both :results output
+./ex-garray-1
+#+END_SRC
+
+#+RESULTS: Glib-example-1-run
+: There are now 3 items in the array
+: The first item is 'hello'
+: The third item is 'world'
+: There are now 2 items in the array
+
+*** An array of =GArrays=
+
+We will store our spike trains in an array of =GArrays= that we will call, guess it, =history= (the $\mathcal{F}_t$ of the article). Let us write a short function =malloc_garrays2= that allocates the memory required by this array of =GArrays=. The function takes a single parameter:
+- *n_neurons* (size_t): the number of neurons in the model, that is, the number of =GArrays=.
+
+#+NAME: malloc_garrays2
+#+BEGIN_SRC C :eval never
+GArray ** malloc_garrays2(size_t n_neurons)
+{
+  GArray **result=malloc(n_neurons*sizeof(GArray*));
+  for (size_t n_idx=0; n_idx < n_neurons; n_idx++)
+    {
+      result[n_idx] = g_array_sized_new(FALSE, FALSE, sizeof(int), 1024);
+    }
+  return result;  
+}
+#+END_SRC
+
+We write next a function, =free_garrays2=, that frees the memory taken up by an array of =GArrays=. The function takes two parameters:
+- *history* (GArray **).
+- *n_neurons* (size_t): the number of neurons.
+
+#+NAME: free_garrays2
+#+BEGIN_SRC C :eval never
+int free_garrays2(GArray ** history, size_t n_neurons)
+{
+  for (size_t n_idx=0; n_idx < n_neurons; n_idx++)
+    {
+      g_array_free(history[n_idx],TRUE);
+    }
+  free(history);
+  return 0;
+}
+#+END_SRC
+
+Let us write a short program, =garrays2_test.c=, that tests that everything goes fine:
+
+#+NAME: garrays2_test
+#+BEGIN_SRC C :tangle garrays2_test.c :noweb no-export
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <glib.h>
+
+#define N_NEURONS 10
+
+GArray ** malloc_garrays2(size_t n_neurons);
+
+int free_garrays2(GArray ** history, size_t n_neurons);
+
+int main(void)
+{
+  GArray **history = malloc_garrays2 (N_NEURONS);
+  free_garrays2(history,N_NEURONS);
+  return 0;
+}
+
+<<malloc_garrays2>>
+
+<<free_garrays2>>
+#+END_SRC
+
+We modify our =Makefile= to have the right flags for =libglib=:
+
+#+NAME: Makefile2
+#+BEGIN_SRC makefile :tangle Makefile 
+P=programe_name
+OBJECTS=
+CFLAGS += `pkg-config --cflags glib-2.0 gsl` -g -Wall -O3 -std=gnu11 
+LDLIBS = `pkg-config --libs glib-2.0 gsl ` 
+
+$(P): $(OBJECTS)
+
+#+END_SRC
+
+Note: the "+" before the equal sign in the =CFLAGS= specification is there to allow user to add flags later on, I found that on [[http://stackoverflow.com/questions/2129391/append-to-gnu-make-variables-via-command-line][stackoverflow]].
+
+The code is then compiled with:
+
+#+NAME: garrays2_test-compile
+#+BEGIN_SRC shell :results output :exports both
+make P=garrays2_test
+#+END_SRC
+
+#+RESULTS: garrays2_test-compile
+: cc `pkg-config --cflags glib-2.0` -g -Wall -O3 -std=gnu11 \    
+:   garrays2_test.c  `pkg-config --libs glib-2.0 gsl `  -o garrays2_test
+
+It is run with:
+
+#+NAME: garrays2_test-run
+#+BEGIN_SRC shell :results output :exports both
+./garrays2_test
+#+END_SRC
+
+#+RESULTS: garrays2_test-run
+
+It does not print anything! That's normal, in fact I recompile the file after changing the =-O3= to =-O0= in the =Makefile= and then I run it with [[http://valgrind.org/][valgrind]] to check for memory leaks with:
+
+#+NAME: garrays2_test-valgrind-check
+#+BEGIN_SRC shell :results output :exports code
+touch garrays2_test.c
+sed -e "s/-O3/-O0/g" < Makefile > Makefile2
+make -f Makefile2 P=garrays2_test
+valgrind --leak-check=yes ./garrays2_test
+#+END_SRC
+
+#+RESULTS: garrays2_test-valgrind-check
+: make: rien à faire pour « Makefile2 ».
+
+** Fast computation of synaptic leaks
+
+Our choice of synaptic leak functions above involves the "costly" computation of an exponential at each function evaluation. We will therefore implement a fast approximation of the exponential function proposed by Schraudolph[fn:Schraudolph1999]. This implementation involves the definition of two constants and a macro given in the next code bloc (=<<Schraudolph-exp>>=). In order to be able to recompile quickly our codes with or without this fast exponential implementation we will make its inclusion in the code dependent on existence of the =FAST_EXP= macro. By default this macro will not exist and the the fast implementation won't be used but if we use =-DFAST_EXP= upon compilation, the macro will be defined and the fast implementation included. 
+
+#+NAME: Schraudolph-exp
+#+BEGIN_SRC C :eval never
+#include <math.h>
+
+#if defined(FAST_EXP)
+static union
+{
+  double d;
+  struct
+  {
+    int j,i;
+  } n;
+} _eco;
+
+#define EXP_A (1048576/M_LN2)
+#define EXP_C 60801
+
+#define EXP(y) (_eco.n.i=EXP_A*(y)+(1072693248-EXP_C),_eco.d)
+#endif
+#+END_SRC
+
+*** A test
+
+We now write a code that outputs the value of the logistic function (as in figure 1 of Schraudolph's paper) computed with both the usual =exp= function of the standard math library and with the fast version. We write the output to =stdout=. The following code is saved in a file called =exp_compare.c=:
+
+#+NAME: exp_compare
+#+BEGIN_SRC C :tangle exp_compare.c :noweb no-export
+#include <stdio.h>
+#include <stdlib.h>
+
+#define FAST_EXP
+<<Schraudolph-exp>>
+
+int main()
+{
+  for (size_t i=0; i < 1002; i++)
+    {
+      double x = i*0.01-5;
+      fprintf(stdout,"%7.5g\t%12.10g\t%12.10g\n",x,1/(1+exp(-x)),
+	      1/(1+EXP(-x)));
+    }
+  exit (EXIT_SUCCESS);
+}
+#+END_SRC
+
+The compilation is done with:
+
+#+NAME: exp_compare-compilation
+#+BEGIN_SRC shell :exports both
+gcc -std=gnu11 -g -Wall -o exp_compare exp_compare.c -lm
+#+END_SRC
+
+#+RESULTS: exp_compare-compilation
+
+We run it and redirect the =stdout= to a file called exp_compare.txt with:
+
+#+NAME: exp_compare-run
+#+BEGIN_SRC shell
+./exp_compare > exp_compare.txt
+#+END_SRC
+
+#+RESULTS: exp_compare-run
+
+We plot the results with =gnuplot=:
+
+#+NAME: exp_compare-graph
+#+BEGIN_SRC gnuplot :session *gnuplot* :file exp_compare_graph.png :exports both
+set xlabel "x"
+set ylabel "1/(1+exp(-x))"
+set key top left
+plot "exp_compare.txt" using 1:2 with lines lw 2 lc rgb "black" \
+     title "math exp", \
+     "" using 1:3 with lines lw 2 lc rgb "red" title "macro EXP"
+#+END_SRC
+
+#+RESULTS: exp_compare-graph
+[[file:exp_compare_graph.png]]
+
+*** Run time comparison
+
+We now compile twice the (almost) same code drawing 10$^9$ random numbers with a uniform distribution between -10 and 10 before computing the exponential. One version uses the math =exp= version and the other uses the =EXP= macro. The exponential version used is under the control of the =FAST_EXP= macro, the code is written in a file called =many_exp.c=:
+
+#+NAME: many_exp
+#+BEGIN_SRC C :tangle many_exp.c :noweb no-export
+#include <stdlib.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+
+<<Schraudolph-exp>>
+
+#define MIN -10.0
+#define MAX 10.0
+#define NB 1000000000
+
+int main()
+{
+  const gsl_rng_type * T;
+  gsl_rng * r;
+  gsl_rng_env_setup();
+
+  T = gsl_rng_default;
+  r = gsl_rng_alloc (T);
+
+  for (size_t i=0; i<NB; i++)
+    {
+      double u=gsl_ran_flat(r,MIN,MAX);
+#if defined(FAST_EXP)
+      EXP(u);
+#else
+      exp(u);
+#endif
+    }
+  exit (EXIT_SUCCESS);
+}
+#+END_SRC
+
+We compile without defining the =FAST_EXP= macro meaning that we use the =exp= function from the standard =math= library:
+
+#+NAME: many_exp_from_math-compilation
+#+BEGIN_SRC shell 
+cc -g -Wall -O3 -std=gnu11  many_exp.c  `pkg-config --libs gsl` \
+   -o many_exp_from_math
+#+END_SRC
+
+#+RESULTS: many_exp_from_math-compilation
+
+We run it and time it with:
+
+#+NAME: many_exp_from_math-run
+#+BEGIN_SRC shell :results output :exports both 
+time ./many_exp_from_math
+#+END_SRC
+
+#+RESULTS: many_exp_from_math-run
+: real	0m13.406s
+: user	0m13.397s
+: sys	0m0.000s
+
+Doing the same thing using the =EXP= from our macro:
+#+NAME: many_exp_from_macro-compilation
+#+BEGIN_SRC shell 
+cc -g -Wall -O3 -std=gnu11  -DFAST_EXP many_exp.c  `pkg-config --libs gsl`\
+   -o many_exp_from_macro
+#+END_SRC
+
+#+RESULTS: many_exp_from_macro-compilation
+
+We run it and time it with:
+
+#+NAME: many_exp_from_macro-run
+#+BEGIN_SRC shell :results output :exports both 
+time ./many_exp_from_macro
+#+END_SRC
+
+#+RESULTS: many_exp_from_macro-run
+: real	0m12.250s
+: user	0m12.230s
+: sys	0m0.000s
+
+To make a fair estimate of the exponential computation time, we must evaluate the random variate generation time. Writing the following code in a file called =rng_generation.c=:
+
+#+NAME: rng_generation
+#+BEGIN_SRC C :tangle rng_generation.c
+#include <stdlib.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+
+#define MIN -10.0
+#define MAX 10.0
+#define NB 1000000000
+
+int main()
+{
+  const gsl_rng_type * T;
+  gsl_rng * r;
+  gsl_rng_env_setup();
+
+  T = gsl_rng_default;
+  r = gsl_rng_alloc (T);
+
+  for (size_t i=0; i<NB; i++)
+    {
+      double u=gsl_ran_flat(r,MIN,MAX);
+    }
+  exit (EXIT_SUCCESS);
+}
+#+END_SRC
+
+We compile with:
+
+#+NAME: rng_generation-compilation 
+#+BEGIN_SRC shell 
+cc -g -Wall -O3 -std=gnu11  rng_generation.c  `pkg-config --libs gsl`\
+   -o rng_generation
+#+END_SRC
+
+#+RESULTS: rng_generation-compilation
+
+We run it and time it with:
+
+#+NAME: rng_generation-run
+#+BEGIN_SRC shell :results output :exports both 
+time ./rng_generation
+#+END_SRC
+
+#+RESULTS: rng_generation-run
+: real	0m12.333s
+: user	0m12.230s
+: sys	0m0.010s
+
+The 10$^9$ exponential evaluations take therefore 850 ms with the math =exp= function and 110 ms with the =EXP= macro. We have a factor close to 8!
+
+*** Definitions of the synaptic leak functions
+
+Equipped with the =EXP= macro we can define "efficient" synaptic leak functions starting with =g_e= that depends on three parameters:
+
+- *delay* (size_t): the difference between present time and the considered spike time.
+- *tau_e* (double): the excitatory time constant.
+- *d_e* (size_t): the excitatory delay.
+
+#+NAME: g_e
+#+BEGIN_SRC C :eval never
+double g_e(size_t delay, double tau_e, size_t d_e)
+{
+  double x = (delay-d_e)/tau_e;
+  if (x < 0 || x > 5)
+    return 0.0;
+  else
+    {
+#if defined(FAST_EXP)
+      return EXP(-x);
+#else
+      return exp(-x);
+#endif      
+    }
+}
+#+END_SRC
+
+Function =g_i= also depends on three parameters:
+
+- *delay* (size_t): the difference between present time and the considered spike time.
+- *tau_i* (double): the inhibitory time constant.
+- *d_i* (size_t): the inhibitory delay.
+
+#+NAME: g_i
+#+BEGIN_SRC C :eval never
+double g_i(size_t delay, double tau_i, size_t d_i)
+{
+  double x = (delay-d_i)/tau_i;
+  if (x < 0 || x > 10)
+    return 0.0;
+  else
+    {
+#if defined(FAST_EXP)
+      return x*EXP(1-x);
+#else
+      return x*exp(1-x);
+#endif
+    }
+}
+#+END_SRC
+
+** History initialization with the mean-field solution 
+
+*Warning: there is a mistake somewhere in the following derivation and I haven't found yet where it is!*
+
+The last element we need in order to have a complete simulation code is the part that deals with the initialization our =history= variable. We are going to use the [[https://en.wikipedia.org/wiki/Mean_field_theory][mean field]] solution (if it exists), that is, the first spike of each neuron will be drawn from an exponential distribution whose (rate) parameter is the mean field rate.
+
+*** Getting the mean field rate
+
+We are assuming here that our network is homogeneous: the probability of excitatory / inhibitory connection is uniform, the synaptic weights are uniformly distributed, the activation functions, $\varphi$, are the same for every neuron as well as the synaptic leak (given the connection type). If a mean field solution exists then each neuron has a uniform probability (rate), $\overline{\nu}$, of spiking at each time step. This $\overline{\nu}$ must then satisfy the equation: $\overline{\nu} = \varphi\left(\overline{u}(\overline{\nu})\right)$. Our job now is to find an expression for $\overline{u}(\overline{\nu})$ that should be a "proper" adaptation equation:
+\[u_{t+1}(i) \doteq \sum_{j \in I} W_{j \rightarrow i} \sum_{s=L_{t+1}^i+1}^t g_j(t+1-s) X_s(j)\, .\]
+We are going to replace $\sum_{j \in I} W_{j \rightarrow i}$ by the sum of two terms, one for excitatory inputs and an other for the inhibitory ones giving:
+\[\sum_{j \in I} W_{j \rightarrow i} \rightarrow n_{neurons} (p_e \, \overline{w}_e + p_i \, \overline{w}_i) \, ,\]
+where:
+- $n_{neurons}$ is the total number of neurons, parameter =n_neurons= of function =mk_graph=.
+- $p_e$ is the probability of excitatory connection, parameter =p_e= of function =mk_graph=.
+- $\overline{w}_e$ is the mean excitatory synaptic weight, obtained with =(w_e_max+w_e_min)/2= from the parameters of function =mk_graph=.
+- $p_i$ is the probability of inhibitory connection, parameter =p_i= of function =mk_graph=.
+- $\overline{w}_i$ is the mean inhibitory synaptic weight, obtained with =(w_i_max+w_i_min)/2= from the parameters of function =mk_graph=.
+We now have to deal with the term $\sum_{s=L_{t+1}^i+1}^t g_j(t+1-s) X_s(j)$; we do that by considering all the possible occurrence times of the previous spike up to =10 x tau_i= since beyond this delay the leak functions are all zero:
+- If the last spike occurred at the previous time step---with probability $\overline{\nu}$ ---, then the "flushing effect" means that all the previous synaptic inputs got forgotten giving no contribution to $\overline{u}(\overline{\nu})$.  
+- If the last spike occurred two time steps ago---with probability $\overline{\nu} \times (1-\overline{\nu})$ ---, then the "typical" inhibitory input fired in the last time step with probability $\overline{\nu}$ giving a contribution $g_i(1)$ to $\overline{u}(\overline{\nu})$ and the "typical" excitatory input fired  in the last time step with probability $\overline{\nu}$ giving a contribution $g_e(1)$ to $\overline{u}(\overline{\nu})$. The overall contribution is: $\overline{\nu} \times \left(g_i(1)+g_e(1)\right)$. 
+- If the last spike occurred three time steps ago---with probability $\overline{\nu} \times (1-\overline{\nu})^2$ ---, then the "typical" inhibitory input fired in the last time step with probability $\overline{\nu}$ giving a contribution $g_i(1)$ and two steps ago, with the same probability, giving a contribution $g_i(2)$ to $\overline{u}(\overline{\nu})$; the same reasoning applied to the excitatory input leads to an overall contribution of: $\overline{\nu} \times \left(g_i(1)+g_e(1)+g_i(2)+g_e(2)\right)$.
+- If the last spike occurred $s$ time steps ago--- with probability $\overline{\nu} \times (1-\overline{\nu})^{s-1}$ ---, we get an overall contribution of: $\overline{\nu} \times \sum_{j=1}^{s-1}\left(g_i(j)+g_e(j)\right)$.
+Our expression for $\overline{u}(\overline{\nu})$ becomes:
+\[\overline{u}(\overline{\nu}) = n_{neurons} \, \overline{\nu}^2 \times \left(\sum_{s=2}^{\lceil10 \, \tau_i\rceil} (1-\overline{\nu})^{s-1}\, \sum_{j=1}^{s-1}\left(p_i \, \overline{w}_i \, g_i(j) + p_e \, \overline{w}_e \, g_e(j)\right) \right)\, .\]
+
+We now define a few =C= functions doing the required computation.
+
+#+BEGIN_COMMENT
+\[\overline{u} = \overline{\nu} \, n_{neurons} \, \left(p_e \overline{w}_e G_e + p_i \overline{w}_i G_i\right)\, .\]
+In the above equations the variables are:
+- $n_{neurons}$: the total number of neurons, parameter =n_neurons= of function =mk_graph=.
+- $p_e$: the probability of excitatory connection, parameter =p_e= of function =mk_graph=.
+- $\overline{w}_e$: the mean excitatory synaptic weight, obtained with =(w_e_max+w_e_min)/2= from the parameters of function =mk_graph=.
+- $G_e$: the integral of function =g_e=. 
+- $p_i$: the probability of inhibitory connection, parameter =p_i= of function =mk_graph=.
+- $\overline{w}_i$: the mean inhibitory synaptic weight, obtained with =(w_i_max+w_i_min)/2= from the parameters of function =mk_graph=.
+- $G_i$: the integral of function =g_i=. 
+
+We will now write a code returning $\varphi\left(\overline{\nu} \, n_{neurons} \, \left(p_e \overline{w}_e G_e + p_i \overline{w}_i G_i\right)\right)$.
+#+END_COMMENT
+
+*** Utility function definitions
+
+We define =G_e= that returns a pointer to a =gsl_vector= whose elements contain the cumulative sum of =g_e=---it takes the same parameters as =g_e= except the first---:
+
+#+NAME: G_e
+#+BEGIN_SRC C :eval never
+gsl_vector * G_e(double tau_e, size_t d_e)
+{
+  size_t n = ceil(5*tau_e);
+  gsl_vector * res = gsl_vector_alloc(n);
+  gsl_vector_set(res,0,g_e(1,tau_e,d_e));
+  for (size_t i=1; i < n; i++)
+    gsl_vector_set(res,i,gsl_vector_get(res,i-1)+g_e(i+1,tau_e,d_e));
+  return res;
+}
+#+END_SRC
+
+The use of this function requires directive =#include <gsl/gsl_vector.h>= as well as directive =#include <math.h>=. We now define =G_i= that returns a pointer to a =gsl_vector= whose elements contain the cumulative sum of =g_i=---it takes the same parameters as =g_i= except the first---:
+
+#+NAME: G_i
+#+BEGIN_SRC C :eval never
+gsl_vector * G_i(double tau_i, size_t d_i)
+{
+  size_t n = ceil(10*tau_i);
+  gsl_vector * res = gsl_vector_alloc(n);
+  gsl_vector_set(res,0,g_i(1,tau_i,d_i));
+  for (size_t i=1; i < n; i++)
+    gsl_vector_set(res,i,gsl_vector_get(res,i-1)+g_i(i+1,tau_i,d_i));
+  return res;
+}
+#+END_SRC
+
+The use of this function requires the same directives as =G_e=.
+
+We define =u_at_nu= that returns $\overline{u}(\overline{\nu})$ and take the following parameters:
+- *nu_bar* (double): the value of $\overline{\nu}$.
+- *n_neurons* (size_t): the number of neurons.
+- *p_e* (double): the probability of excitatory connection.
+- *w_e_min* (double): the minimal excitatory weight.
+- *w_e_max* (double): the maximal excitatory weight.
+- *G_e* (gsl_vector *): the output of =G_e=.  
+- *p_i* (double): the probability of inhibitory connection.
+- *w_i_min* (double): the minimal inhibitory weight.
+- *w_i_max* (double): the maximal inhibitory weight.
+- *G_i* (gsl_vector *): the output of =G_i=.
+The function returns a double.
+
+#+NAME: u_at_nu
+#+BEGIN_SRC C :eval never
+double u_at_nu(double nu_bar, size_t n_neurons,
+	       double p_e, double w_e_min, double w_e_max,
+	       gsl_vector * G_e,
+	       double p_i, double w_i_min, double w_i_max,
+	       gsl_vector * G_i)
+{
+  size_t max = G_i->size;
+  double u = 0;
+  double e_factor = p_e*(w_e_min+w_e_max)*0.5;
+  double i_factor = p_i*(w_i_min+w_i_max)*0.5;
+  for (size_t s=2; s <= max; s++)
+    {
+      double Ge;
+      if (s-1 < G_e->size)
+	Ge = gsl_vector_get(G_e,s-1);
+      else
+	Ge = gsl_vector_get(G_e,G_e->size-1);
+      double Gi = gsl_vector_get(G_i,s-1);
+      u += pow((1-nu_bar),(double) (s-1))*(Ge*e_factor+Gi*i_factor);
+    }
+  return u*n_neurons*nu_bar*nu_bar;
+}
+#+END_SRC
+
+The use of this functions requires directive =#include <gsl/gsl_vector.h>= as well as directive =#include <math.h>=.
+
+*** A program returning $\varphi(\overline{\nu})$
+
+We now write a program =mean_field= returning a sequence of $\left(\overline{\nu},\overline{u}(\overline{\nu}),\varphi(\overline{\nu})\right)$ values. The parameters taken by the program are spelled out in the following =<<print_usage_mean_field>>= function:
+
+#+NAME: print_usage_mean_field
+#+BEGIN_SRC C :eval never
+void print_usage_mean_field() {
+  printf("Usage: \n"
+	 "  --n_neurons <positive integer>: the number of neurons in the"
+	 " network\n"
+	 "  --p_e <double in (0,1)>: the probability of excitatory "
+	 "connection between two neurons\n"
+	 "  --w_e_min <positive double>: the minimal excitatory synaptic "
+	 "weight\n"
+	 "  --w_e_min <positive double>: the maximal excitatory synaptic "
+	 "weight\n"
+	 "  --tau_e <positive double>: the time constant of excitatory "
+	 "leak functions\n"
+	 "  --d_e <positive integer>: the excitatory synaptic delay\n"
+	 "  --p_i <double in (0,1)>: the probability of inhibitory "
+	 "connection between two neurons\n"
+	 "  --w_i_min <negative double>: the minimal inhibitory synaptic "
+	 "weight\n"
+	 "  --w_i_max <negative double>: the maximal inhibitory synaptic "
+	 "weight\n"
+	 "  --tau_i <positive double>: the time constant of inhibitory "
+	 "leak functions\n"
+	 "  --d_i <positive integer>: the inhibitory synaptic delay\n"
+	 "  --varphi_0 <double in (0,1)>: the basal value of the "
+	 "activation function\n"
+	 "  --varphi_k <positive double>: constant controlling the "
+	 "steepness of the activation function\n"
+	 "  --n_steps <positive integer>: the number of nu_bar values "
+	 "to explore between varphi_0 and 1\n"
+	 "\n");
+}
+#+END_SRC
+
+We now write the =<<read_par_mean_field>>= code:
+
+#+NAME: read_par_mean_field
+#+BEGIN_SRC C :eval never
+int read_par_mean_field(int argc, char ** argv,
+			size_t * n_neurons,
+			double * p_e, double * w_e_min, double * w_e_max,
+			double * tau_e, size_t * d_e,
+			double * p_i, double * w_i_min, double * w_i_max,
+			double * tau_i, size_t * d_i,
+			double * varphi_0, double * varphi_k,
+			size_t * n_steps)
+{
+  if (argc == 1) {
+    print_usage_mean_field();
+    return -1;
+  }
+  // Define default values
+  ,*p_e = 0.1;
+  ,*w_e_min = 2;
+  ,*w_e_max = 4;
+  ,*tau_e = 5;
+  ,*d_e = 1;
+  ,*p_i = 0.2;
+  ,*w_i_min = -0.01;
+  ,*w_i_max = -0.005;
+  ,*tau_i = 5;
+  ,*d_i = 5;
+  ,*varphi_0=0.01;
+  ,*varphi_k = 10;
+  ,*n_steps = 1001;
+  {int opt;
+    static struct option long_options[] = {
+      {"n_neurons",required_argument,NULL,'n'},
+      {"p_e",optional_argument,NULL,'a'},
+      {"w_e_min",optional_argument,NULL,'b'},
+      {"w_e_max",optional_argument,NULL,'c'},
+      {"p_i",optional_argument,NULL,'d'},
+      {"w_i_min",optional_argument,NULL,'e'},
+      {"w_i_max",optional_argument,NULL,'f'},
+      {"help",no_argument,NULL,'h'},
+      {"tau_e",optional_argument,NULL,'i'},
+      {"d_e",optional_argument,NULL,'j'},
+      {"tau_i",optional_argument,NULL,'k'},
+      {"d_i",optional_argument,NULL,'l'},
+      {"varphi_0",optional_argument,NULL,'m'},
+      {"varphi_k",optional_argument,NULL,'g'},
+      {"n_steps",optional_argument,NULL,'o'},
+      {NULL,0,NULL,0}
+    };
+    int long_index =0;
+    while ((opt = getopt_long(argc,argv,"hn:a:b:c:d:e:f:g:i:j:k:l:m:o:",
+			      long_options,&long_index)) != -1) {
+      switch(opt) {
+      case 'n':
+	{
+	  int n=atoi(optarg);
+	  if (n <= 0)
+	    {
+	      fprintf(stderr,"The number of neurons should be > 0.\n");
+	      return -1;
+	    }
+	  ,*n_neurons=(size_t) n; 
+	}
+	break;
+      case 'a': *p_e=atof(optarg);
+	break;
+      case 'b': *w_e_min=atof(optarg);
+	break;
+      case 'c': *w_e_max=atof(optarg);
+	break;
+      case 'd': *p_i=atof(optarg);
+	break;
+      case 'e': *w_i_min=atof(optarg);
+	break;
+      case 'f': *w_i_max=atof(optarg);
+	break;
+      case 'i': *tau_e=atof(optarg);
+	break;
+      case 'j':
+	{
+	  int n=atoi(optarg);
+	  if (n <= 0)
+	    {
+	      fprintf(stderr,"The excitatory synaptic delay should be > 0.\n");
+	      return -1;
+	    }
+	  ,*d_e=(size_t) n; 
+	}
+	break;
+      case 'k': *tau_i=atof(optarg);
+	break;
+      case 'l':
+	{
+	  int n=atoi(optarg);
+	  if (n <= 0)
+	    {
+	      fprintf(stderr,"The inhibitory synaptic delay should be > 0.\n");
+	      return -1;
+	    }
+	  ,*d_i=(size_t) n; 
+	}
+	break;
+      case 'm': *varphi_0=atof(optarg);
+	break;
+      case 'g': *varphi_k=atof(optarg);
+	break;
+      case 'o':
+	{
+	  int n=atoi(optarg);
+	  if (n <= 0)
+	    {
+	      fprintf(stderr,"The number of nu_bar steps should be > 0.\n");
+	      return -1;
+	    }
+	  ,*n_steps=(size_t) n; 
+	}
+	break;
+      case 'h': print_usage_mean_field();
+	return -1;
+      default : print_usage_mean_field();
+	return -1;
+      }
+    }
+  }
+  // Check that the parameters are correct
+  if (*p_e < 0 || *p_e > 1)
+    {
+      fprintf(stderr,"We must have 0 <= p_e <= 1.\n");
+      return -1;
+    }
+  if (*p_i < 0 || *p_i > 1)
+    {
+      fprintf(stderr,"We must have 0 <= p_i <= 1.\n");
+      return -1;
+    }
+  if (*w_e_min <= 0 || *w_e_max <= 0)
+    {
+      fprintf(stderr,"Excitatory weights must be > 0.\n");
+      return -1;
+    }
+  if (*w_e_min >= *w_e_max)
+    {
+      fprintf(stderr,"We must have w_e_min < w_e_max.\n");
+      return -1;
+    }
+  if (*w_i_min >= 0 || *w_i_max >= 0)
+    {
+      fprintf(stderr,"Inhibitory weights must be < 0.\n");
+      return -1;
+    }
+  if (*w_i_min >= *w_i_max)
+    {
+      fprintf(stderr,"We must have w_i_min < w_i_max.\n");
+      return -1;
+    }
+  if (*tau_i < 0)
+    {
+      fprintf(stderr,"We must have 0 <= tau_i.\n");
+      return -1;
+    }
+  if (*tau_e < 0)
+    {
+      fprintf(stderr,"We must have 0 <= tau_e.\n");
+      return -1;
+    }
+  if (*varphi_0 < 0 || *varphi_0 > 1)
+    {
+      fprintf(stderr,"We must have 0 <= varphi_0 <= 1.\n");
+      return -1;
+    }
+  if (*varphi_k <= 0)
+    {
+      fprintf(stderr,"We must have 0 < varphi_k.\n");
+      return -1;
+    }
+  return 0;
+}
+#+END_SRC
+
+Our =mean_field= program is going to write its results to the =stdout= with a preamble (lines starting with a =#= interpreted as comments by =gnuplot=) containing the value of the parameters used. The function writing the preamble, =write_mean_field_preamble= is defined next:
+
+#+NAME: write_mean_field_preamble
+#+BEGIN_SRC C :eval never
+int write_mean_field_preamble(size_t * n_neurons,
+			      double * p_e, double * w_e_min,
+			      double * w_e_max,
+			      double * tau_e, size_t * d_e,
+			      double * p_i, double * w_i_min,
+			      double * w_i_max,
+			      double * tau_i, size_t * d_i,
+			      double * varphi_0, double * varphi_k,
+			      size_t * n_steps)
+{
+  fprintf(stdout,"###########################################\n"
+	  "# Parameters used when running the program\n");
+  fprintf(stdout,"# The number of neurons is: %d\n", (int) * n_neurons);
+  fprintf(stdout,"# Probability of excitatory connection: %g\n", * p_e);
+  fprintf(stdout,"# Minimal excitatory weight: %g\n", * w_e_min);
+  fprintf(stdout,"# Maximal excitatory weight: %g\n", * w_e_max);
+  fprintf(stdout,"# Excitatory time constant: %g\n", * tau_e);
+  fprintf(stdout,"# Excitatory time delay: %d\n", (int) * d_e);
+  fprintf(stdout,"# Probability of inhibitory connection: %g\n", * p_i);
+  fprintf(stdout,"# Minimal inhibitory weight: %g\n", * w_i_min);
+  fprintf(stdout,"# Maximal inhibitory weight: %g\n", * w_i_max);
+  fprintf(stdout,"# Inhibitory time constant: %g\n", * tau_i);
+  fprintf(stdout,"# Inhibitory time delay: %d\n", (int) * d_i);
+  fprintf(stdout,"# varphi_0: %g\n", * varphi_0);
+  fprintf(stdout,"# varphi_k: %g\n", * varphi_k);
+  fprintf(stdout,"# Number of steps: %d\n", (int) * n_steps);
+  fprintf(stdout,"###########################################\n");
+  return 0;
+}
+#+END_SRC
+
+The program written to file =mean_field.c= is then:
+
+#+NAME: mean_field
+#+BEGIN_SRC C :tangle mean_field.c :noweb no-export
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <getopt.h>
+#include <gsl/gsl_math.h>
+#include <gsl/gsl_vector.h>
+
+<<Schraudolph-exp>>
+
+int read_par_mean_field(int argc, char ** argv,
+			size_t * n_neurons,
+			double * p_e, double * w_e_min,
+			double * w_e_max,
+			double * tau_e, size_t * d_e,
+			double * p_i, double * w_i_min,
+			double * w_i_max,
+			double * tau_i, size_t * d_i,
+			double * varphi_0, double * varphi_k,
+			size_t * n_steps);
+
+void print_usage_mean_field();
+
+int write_mean_field_preamble(size_t * n_neurons,
+			      double * p_e, double * w_e_min,
+			      double * w_e_max,
+			      double * tau_e, size_t * d_e,
+			      double * p_i, double * w_i_min,
+			      double * w_i_max,
+			      double * tau_i, size_t * d_i,
+			      double * varphi_0, double * varphi_k,
+			      size_t * n_steps);
+
+double u_at_nu(double nu_bar, size_t n_neurons,
+	       double p_e, double w_e_min, double w_e_max,
+	       gsl_vector * G_e,
+	       double p_i, double w_i_min, double w_i_max,
+	       gsl_vector * G_i);
+
+gsl_vector * G_i(double tau_i, size_t d_i);
+
+gsl_vector * G_e(double tau_e, size_t d_e);
+
+double varphi(double u, double varphi_0, double k);
+
+double g_i(size_t delay, double tau_i, size_t d_i);
+
+double g_e(size_t delay, double tau_e, size_t d_e);
+
+int main(int argc, char ** argv)
+{
+  size_t n_neurons, d_e, d_i, n_steps;
+  double p_e, w_e_min, w_e_max, tau_e;
+  double p_i, w_i_min, w_i_max, tau_i;
+  double varphi_0, varphi_k;
+  int status = read_par_mean_field(argc, argv, &n_neurons,
+				   &p_e, &w_e_min, &w_e_max,
+				   &tau_e, &d_e,
+				   &p_i, &w_i_min, &w_i_max,
+				   &tau_i, &d_i,
+				   &varphi_0, &varphi_k, &n_steps);
+
+  if (status == -1) exit (EXIT_FAILURE);
+
+  write_mean_field_preamble(&n_neurons, &p_e, &w_e_min, &w_e_max,
+			    &tau_e, &d_e, &p_i, &w_i_min, &w_i_max,
+			    &tau_i, &d_i, &varphi_0, &varphi_k,
+			    &n_steps);
+  gsl_vector * Ig_e;
+  Ig_e = G_e(tau_e, d_e);
+  gsl_vector * Ig_i;
+  Ig_i = G_i(tau_i, d_i);
+  double step = (1-varphi_0)/(n_steps-1);
+  for (size_t i=0; i<n_steps; i++)
+    {
+      double t = varphi_0+i*step;
+      double u = u_at_nu(t, n_neurons,
+			 p_e, w_e_min, w_e_max, Ig_e,
+			 p_i, w_i_min, w_i_max, Ig_i);
+      double varphi_val = varphi(u,varphi_0,varphi_k);
+      fprintf(stdout,"%12.10g\t%12.10g\t%12.10g\n",
+	      t,u,varphi_val);
+    }
+
+  gsl_vector_free(Ig_e);
+  gsl_vector_free(Ig_i);
+  exit (EXIT_SUCCESS);
+}
+
+<<read_par_mean_field>>
+
+<<print_usage_mean_field>>
+
+<<write_mean_field_preamble>>
+
+<<u_at_nu>>
+
+<<G_i>>
+
+<<G_e>>
+
+<<g_i>>
+
+<<g_e>>
+
+<<varphi>>
+#+END_SRC
+
+The compilation is then done with the command:
+
+#+NAME: compile-mean_field
+#+BEGIN_SRC shell :exports both :results output
+make P=mean_field
+#+END_SRC
+
+#+RESULTS: compile-mean_field
+: cc -g -Wall -O3 -std=gnu11    mean_field.c  `pkg-config --libs gsl`  -o mean_field
+
+A first test is done with:
+
+#+NAME: mean_field_1
+#+BEGIN_SRC shell :exports both :results output
+./mean_field --n_neurons=800 --tau_i=5 --d_i=4 \
+	     --p_i=0.25 --tau_e=5 --w_e_min=0.2 \
+	     --w_e_max=0.3 --d_e=1 --p_e=0.1 \
+	     --w_i_min=-0.02 --w_i_max=-0.005 \
+	     --varphi_0=0.01 --varphi_k=17 \
+	     --n_steps=1001 > mean_field_test1.txt
+#+END_SRC
+
+#+RESULTS: mean_field_1
+
+We plot the results with =gnuplot=:
+
+#+NAME: mean_field_1-graph
+#+BEGIN_SRC gnuplot :session *gnuplot* :file mean_field_1.png :exports both
+set xlabel "{/OpenSymbol ν}"
+set ylabel "{/OpenSymbol φ(ν)}"
+set key top left
+set grid
+plot [0:0.3] [0:0.3] "mean_field_test1.txt" using 1:3 with lines lw 2\
+     lc rgb "red" title "{/OpenSymbol φ(ν)}", \
+     "" using 1:1 with lines lw 2 lc rgb "black" \
+     title "{/OpenSymbol ν}"
+#+END_SRC
+
+#+RESULTS: mean_field_1-graph
+[[file:mean_field_1.png]]
+
+There seem to be two stable fixed-points one close to close 0 the other one close to 0.23, if it's not wrong it's interesting since the presence of two stable fixed-points is the allmark of working memory models at the network level.
+
+*** Getting a numerical estimation of the fixed point values
+
+We want now to write a program returning a numerical value for a fixed point. To that end we are going to use the [[https://www.gnu.org/software/gsl/manual/html_node/One-dimensional-Root_002dFinding.html#One-dimensional-Root_002dFinding][one dimensional root-finding]] routines of the =gsl=. We want to find the root of: $\varphi(\overline{\nu})-\overline{\nu}$ while still being able to work with different parameters like =varphi_0=, =p_e=, etc. The =gsl= then requires that we separate the parameters of the function whose root(s) we look for into two parts: 
+- The variable $\overline{\nu}$ above.
+- All the other parameters:
+  + =n_neurons=, =d_e=, =d_i= (=size_t=);
+  + =p_e=, =w_e_min=, =w_e_max=, =p_i=, =w_i_min=, =w_i_max=, =varphi_0=, =varphi_k=;
+  + =G_e=, =G_i= (=gsl_vector *=).
+
+To that end, following [[https://www.gnu.org/software/gsl/manual/html_node/Root-Finding-Examples.html#Root-Finding-Examples][the example]] of the =gsl= manual we define a structure with one member for each parameter as well as the signature of the "target function". We do that in =<<mean_field_fixed_point_header>>= given next:
+
+#+NAME: mean_field_fixed_point_header
+#+BEGIN_SRC C :eval never
+typedef struct
+{
+  size_t n_neurons, d_e, d_i;
+  double p_e, w_e_min, w_e_max, p_i, w_i_min, w_i_max, varphi_0, \
+    varphi_k, tau_e, tau_i;
+  gsl_vector * G_e;
+  gsl_vector * G_i;
+} mean_field_fixed_point_params;
+
+double mf_fixed_point_target(double nu, void *params);
+
+#+END_SRC
+
+We define next the =mf_fixed_point_target= function whose root we want to find with respect to parameter =nu=:
+
+#+NAME: mf_fixed_point_target
+#+BEGIN_SRC C :eval never
+double mf_fixed_point_target(double nu, void *params)
+{
+  mean_field_fixed_point_params *p = \
+    (mean_field_fixed_point_params *) params;
+  size_t n_neurons = p->n_neurons;
+  double p_e = p->p_e;
+  double w_e_min = p->w_e_min;
+  double w_e_max = p->w_e_max;
+  double p_i = p->p_i;
+  double w_i_min = p->w_i_min;
+  double w_i_max = p->w_i_max;
+  double varphi_0 = p->varphi_0;
+  double varphi_k = p->varphi_k;
+  gsl_vector * G_e = p->G_e;
+  gsl_vector * G_i = p->G_i;
+
+  double u = u_at_nu(nu, n_neurons, p_e, w_e_min, w_e_max, G_e,
+		     p_i, w_i_min, w_i_max, G_i);
+  return varphi(u,varphi_0,varphi_k)-nu;
+}
+#+END_SRC
+
+Now, the root-finding functions require that the user provides a bracketing interval containing (in principle) one and only one root. We therefore have to adapt our parameter reading functions accordingly as follows:
+
+#+NAME: print_usage_mean_field_fixed_point
+#+BEGIN_SRC C :eval never
+void print_usage_mean_field_fixed_point() {
+  printf("Usage: \n"
+	 "  --n_neurons <positive integer>: the number of neurons in "
+	 "the network\n"
+	 "  --p_e <double in (0,1)>: the probability of excitatory "
+	 "connection between two neurons\n"
+	 "  --w_e_min <positive double>: the minimal excitatory "
+	 "synaptic weight\n"
+	 "  --w_e_min <positive double>: the maximal excitatory "
+	 "synaptic weight\n"
+	 "  --tau_e <positive double>: the time constant of "
+	 "excitatory leak functions\n"
+	 "  --d_e <positive integer>: the excitatory synaptic delay\n"
+	 "  --p_i <double in (0,1)>: the probability of inhibitory "
+	 "connection between two neurons\n"
+	 "  --w_i_min <negative double>: the minimal inhibitory "
+	 "synaptic weight\n"
+	 "  --w_i_max <negative double>: the maximal inhibitory "
+	 "synaptic weight\n"
+	 "  --tau_i <positive double>: the time constant of "
+	 "inhibitory leak functions\n"
+	 "  --d_i <positive integer>: the inhibitory synaptic delay\n"
+	 "  --varphi_0 <double in (0,1)>: the basal value of the "
+	 "activation function\n"
+	 "  --varphi_k <positive double>: constant controlling the "
+	 "steepness of the activation function\n"
+	 "  --nu_lower <double in (0,1)>: the left end of the root "
+	 "bracketing interval\n"
+	 "  --nu_upper <double in (0,1)>: the right end of the root "
+	 "bracketing interval\n"
+	 "\n");
+}
+#+END_SRC
+
+We now write the =<<read_par_mean_field_fixed_point>>= code:
+
+#+NAME: read_par_mean_field_fixed_point
+#+BEGIN_SRC C :eval never
+int read_par_mean_field_fixed_point(int argc, char ** argv,
+				    mean_field_fixed_point_params *p,
+				    double * nu_lower,
+				    double * nu_upper)
+{
+  // Define default values
+  
+  p->n_neurons = 800;
+  p->p_e = 0.1;
+  p->w_e_min = 0.5;
+  p->w_e_max = 1;
+  p->tau_e = 5;
+  p->d_e = 1;
+  p->p_i = 0.2;
+  p->w_i_min = -0.004;
+  p->w_i_max = -0.002;
+  p->tau_i = 5;
+  p->d_i = 4;
+  p->varphi_0 = 0.01;
+  p->varphi_k = 15;
+  ,*nu_lower = 0.25;
+  ,*nu_upper = 0.3;
+  {int opt;
+    static struct option long_options[] = {
+      {"n_neurons",optional_argument,NULL,'n'},
+      {"p_e",optional_argument,NULL,'a'},
+      {"w_e_min",optional_argument,NULL,'b'},
+      {"w_e_max",optional_argument,NULL,'c'},
+      {"p_i",optional_argument,NULL,'d'},
+      {"w_i_min",optional_argument,NULL,'e'},
+      {"w_i_max",optional_argument,NULL,'f'},
+      {"help",no_argument,NULL,'h'},
+      {"tau_e",optional_argument,NULL,'i'},
+      {"d_e",optional_argument,NULL,'j'},
+      {"tau_i",optional_argument,NULL,'k'},
+      {"d_i",optional_argument,NULL,'l'},
+      {"varphi_0",optional_argument,NULL,'m'},
+      {"varphi_k",optional_argument,NULL,'g'},
+      {"nu_lower",optional_argument,NULL,'o'},
+      {"nu_upper",optional_argument,NULL,'p'},
+      {NULL,0,NULL,0}
+    };
+    int long_index =0;
+    while ((opt = getopt_long(argc,argv,
+			      "hn:a:b:c:d:e:f:g:i:j:k:l:m:o:p:",
+			      long_options,&long_index)) != -1) {
+      switch(opt) {
+      case 'n':
+	{
+	  int n=atoi(optarg);
+	  if (n <= 0)
+	    {
+	      fprintf(stderr,"The number of neurons should be > 0.\n");
+	      return -1;
+	    }
+	  p->n_neurons=(size_t) n; 
+	}
+	break;
+      case 'a': p->p_e=atof(optarg);
+	break;
+      case 'b': p->w_e_min=atof(optarg);
+	break;
+      case 'c': p->w_e_max=atof(optarg);
+	break;
+      case 'd': p->p_i=atof(optarg);
+	break;
+      case 'e': p->w_i_min=atof(optarg);
+	break;
+      case 'f': p->w_i_max=atof(optarg);
+	break;
+      case 'i': p->tau_e=atof(optarg);
+	break;
+      case 'j':
+	{
+	  int n=atoi(optarg);
+	  if (n <= 0)
+	    {
+	      fprintf(stderr,"The excitatory synaptic delay should "
+		      "be > 0.\n");
+	      return -1;
+	    }
+	  p->d_e=(size_t) n; 
+	}
+	break;
+      case 'k': p->tau_i=atof(optarg);
+	break;
+      case 'l':
+	{
+	  int n=atoi(optarg);
+	  if (n <= 0)
+	    {
+	      fprintf(stderr,"The inhibitory synaptic delay should "
+		      "be > 0.\n");
+	      return -1;
+	    }
+	  p->d_i=(size_t) n; 
+	}
+	break;
+      case 'm': p->varphi_0=atof(optarg);
+	break;
+      case 'g': p->varphi_k=atof(optarg);
+	break;
+      case 'o': *nu_lower=atof(optarg);
+	break;
+      case 'p': *nu_upper=atof(optarg);
+	break;
+      case 'h': print_usage_mean_field_fixed_point();
+	return -1;
+      default : print_usage_mean_field_fixed_point();
+	return -1;
+      }
+    }
+  }
+  // Check that the parameters are correct
+  if (p->p_e < 0 || p->p_e > 1)
+    {
+      fprintf(stderr,"We must have 0 <= p_e <= 1.\n");
+      return -1;
+    }
+  if (p->p_i < 0 || p->p_i > 1)
+    {
+      fprintf(stderr,"We must have 0 <= p_i <= 1.\n");
+      return -1;
+    }
+  if (p->w_e_min <= 0 || p->w_e_max <= 0)
+    {
+      fprintf(stderr,"Excitatory weights must be > 0.\n");
+      return -1;
+    }
+  if (p->w_e_min >= p->w_e_max)
+    {
+      fprintf(stderr,"We must have w_e_min < w_e_max.\n");
+      return -1;
+    }
+  if (p->w_i_min >= 0 || p->w_i_max >= 0)
+    {
+      fprintf(stderr,"Inhibitory weights must be < 0.\n");
+      return -1;
+    }
+  if (p->w_i_min >= p->w_i_max)
+    {
+      fprintf(stderr,"We must have w_i_min < w_i_max.\n");
+      return -1;
+    }
+  if (p->tau_i < 0)
+    {
+      fprintf(stderr,"We must have 0 <= tau_i.\n");
+      return -1;
+    }
+  if (p->tau_e < 0)
+    {
+      fprintf(stderr,"We must have 0 <= tau_e.\n");
+      return -1;
+    }
+  if (p->varphi_0 < 0 || p->varphi_0 > 1)
+    {
+      fprintf(stderr,"We must have 0 <= varphi_0 <= 1.\n");
+      return -1;
+    }
+  if (p->varphi_k <= 0)
+    {
+      fprintf(stderr,"We must have 0 < varphi_k.\n");
+      return -1;
+    }
+  if (*nu_lower < 0 || *nu_lower > 1)
+    {
+      fprintf(stderr,"We must have 0 <= nu_lower <= 1.\n");
+      return -1;
+    }
+  if (*nu_upper < 0 || *nu_upper > 1 || *nu_upper <= *nu_lower)
+    {
+      fprintf(stderr,"We must have 0 <= nu_lower < nu_lower <= 1.\n");
+      return -1;
+    }
+  return 0;
+}
+#+END_SRC
+
+Our =mean_field_fixed_point= program is going to write its results to the =stdout=. The program written to file =mean_field_fixed_point.c= is then:
+
+#+NAME: mean_field_fixed_point
+#+BEGIN_SRC C :tangle mean_field_fixed_point.c :noweb no-export
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <getopt.h>
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_math.h>
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_roots.h>
+
+<<Schraudolph-exp>>
+
+<<mean_field_fixed_point_header>>
+
+int read_par_mean_field_fixed_point(int argc, char ** argv,
+				    mean_field_fixed_point_params *p,
+				    double * nu_lower,
+				    double * nu_upper);
+
+void print_usage_mean_field_fixed_point();
+
+
+double u_at_nu(double nu_bar, size_t n_neurons,
+	       double p_e, double w_e_min, double w_e_max,
+	       gsl_vector * G_e,
+	       double p_i, double w_i_min, double w_i_max,
+	       gsl_vector * G_i);
+
+gsl_vector * G_i(double tau_i, size_t d_i);
+
+gsl_vector * G_e(double tau_e, size_t d_e);
+
+double varphi(double u, double varphi_0, double k);
+
+double g_i(size_t delay, double tau_i, size_t d_i);
+
+double g_e(size_t delay, double tau_e, size_t d_e);
+
+double mf_fixed_point_target(double nu, void *params);
+
+int main(int argc, char ** argv)
+{
+  mean_field_fixed_point_params params;
+  double nu_lower, nu_upper;
+  int status = read_par_mean_field_fixed_point(argc, argv, &params,
+					       &nu_lower, &nu_upper);
+
+  if (status == -1) exit (EXIT_FAILURE);
+  
+  params.G_e = G_e(params.tau_e, params.d_e);
+  params.G_i = G_i(params.tau_i, params.d_i);
+
+  int iter = 0, max_iter = 100;
+  const gsl_root_fsolver_type *T;
+  gsl_root_fsolver *s;
+  gsl_function F;
+  F.function = &mf_fixed_point_target;
+  F.params = &params;
+
+  T = gsl_root_fsolver_brent;
+  s = gsl_root_fsolver_alloc (T);
+  gsl_root_fsolver_set (s, &F, nu_lower, nu_upper);
+  printf ("using %s method\n",
+	  gsl_root_fsolver_name (s));
+
+  printf ("%5s [%9s, %9s] %9s %9s\n",
+	  "iter", "lower", "upper", "root",
+	  "err(est)");
+
+  do
+    {
+      iter++;
+      status = gsl_root_fsolver_iterate (s);
+      double r = gsl_root_fsolver_root (s);
+      nu_lower = gsl_root_fsolver_x_lower (s);
+      nu_upper = gsl_root_fsolver_x_upper (s);
+      status = gsl_root_test_interval (nu_lower, nu_upper,
+				       0, 0.001);
+
+      if (status == GSL_SUCCESS)
+	printf ("Converged:\n");
+
+      printf ("%5d [%.7f, %.7f] %.7f %.7f\n",
+	      iter, nu_lower, nu_upper,
+	      r, nu_upper - nu_lower);
+    }
+  while (status == GSL_CONTINUE && iter < max_iter);
+
+  gsl_root_fsolver_free (s);
+  gsl_vector_free(params.G_e);
+  gsl_vector_free(params.G_i);
+  return status;
+}
+
+<<read_par_mean_field_fixed_point>>
+
+<<print_usage_mean_field_fixed_point>>
+
+<<u_at_nu>>
+
+<<G_i>>
+
+<<G_e>>
+
+<<g_i>>
+
+<<g_e>>
+
+<<varphi>>
+
+<<mf_fixed_point_target>>
+#+END_SRC
+
+We compile with:
+
+#+NAME: mean_field_fixed_point-compile
+#+BEGIN_SRC shell :exports both :results output
+make P=mean_field_fixed_point
+#+END_SRC
+
+We run it with the parameters previously used:
+
+#+NAME: mean_field_fixed_point-run
+#+BEGIN_SRC shell :exports both :results output
+./mean_field_fixed_point --n_neurons=800 --tau_i=5 --d_i=4  \
+			 --p_i=0.25 --tau_e=5 --w_e_min=0.2 \
+			 --w_e_max=0.3 --d_e=1 --p_e=0.1  \
+			 --w_i_min=-0.02 --w_i_max=-0.005 \
+			 --varphi_0=0.01 --varphi_k=17 \
+			 --nu_lower=0.2 --nu_upper=0.3
+#+END_SRC
+
+#+RESULTS: mean_field_fixed_point-run
+: using brent method
+:  iter [    lower,     upper]      root  err(est)
+:     1 [0.2136329, 0.3000000] 0.2136329 0.0863671
+:     2 [0.2136329, 0.2225940] 0.2225940 0.0089611
+:     3 [0.2216011, 0.2225940] 0.2216011 0.0009929
+:     4 [0.2216547, 0.2225940] 0.2216547 0.0009393
+: Converged:
+:     5 [0.2216547, 0.2216550] 0.2216550 0.0000003
+
+[fn:Laurent96] Laurent G. (1996) Dynamical representation of odors by oscillating and evolving neural assemblies. /TINS/ *19*: 489-496.
+[fn:AntennalLobe] The /antennal lobe/ is the first olfactory relay of the insects, it is the equivalent of the /olfactory bulb/ of the vertebrates.
+[fn:BoeckErnst87] Boeckh, J. and Ernst, K.-D. (1987) Contribution of single unit analysis in insects to an understanding of olfactory function. /J Comp Physiol A/ *161*: 549-565.
+[fn:Schraudolph1999] Nicol L. Schraudolph (1999) [[http://nic.schraudolph.org/bib2html/b2hd-Schraudolph99.html][A Fast, Compact Approximation of the Exponential Function]] /Neural Computation/ *11(4)*: 853-862.
+*** Actual initialization strategy
+We are going to initialize our spike trains by drawing for a given duration--a multiple (for instance 10) of the mean inter spike interval of the mean field solution--spikes independently with the mean field rate. The program will therefore take two parameters: 
+- the mean field rate (0.2217 in the last section case).
+- the multiple of the mean field inter spike interval (the inverse of the mean field rate) during which spikes are drawn in an IID way.
+
+** Advancing by one step: to spike or not to spike
+*** "Early phase": function =spike_or_not_early=
+
+If we are in the "early phase" of the simulation (say for an number of time steps < 10/$\overline{\nu}$) we draw for each neuron a random number with a uniform distribution between zero and one and if the number is smaller than $\overline{\nu}$ the neuron spikes and remains silent otherwise. Function =spike_or_not_early= defined next returns 0 if the neuron does not spike and 1 otherwise; it takes two parameters:
+- *nu_bar* (double): the mean field rate.
+- *r* (a pointer to a [[https://www.gnu.org/software/gsl/manual/html_node/Random-number-generator-initialization.html#Random-number-generator-initialization][gsl_rng]]): a pointer on an allocated =gsl_rng=.
+It is just a wrapper around =gsl= =gsl_ran_flat= function:
+
+#+NAME: spike_or_not_early
+#+BEGIN_SRC C :eval never
+int spike_or_not_early(double nu_bar,
+		       gsl_rng * r)
+{
+  if (gsl_ran_flat(r,0.0,1.0) <= nu_bar)
+    return 1;
+  else
+    return 0;
+}
+#+END_SRC
+
+*** "Main phase"
+Once the early phase is over, every neuron should have fired a few spikes (if the phase is long enough) and from now on, I'm assuming that a last spike is available for each neuron in the network and therefore that each =history[i]= has at least one element. I'm considering a given neuron $i \in \{0,\ldots,\texttt{n_neurons}-1\} \doteq I$ at a given time index $t+1$ and I want to write a function that returns 0 if the neuron does not spike at that time (conditioned on the history) and 1 if it does. In order to clarify the code, I will write:\[u_{t+1}(i) \doteq \sum_{j \in I} W_{j \rightarrow i} \sum_{s=L_{t+1}^i+1}^t g_j(t+1-s) X_s(j)\, .\] That is, $u_{t+1}(i)$ the pseudo-membrane potential used as the argument of function $\varphi_i$ in equation 2.3. 
+
+*** =get_u_i=
+
+I'm going first to define a function =get_u_i= that requires the following parameters:
+- *n_idx* (size_t): the postsynaptic neuron index.
+- *t* (integer): the time index (the $t+1$ of the previous equations).
+- *history* (array of GArrays): the history.
+- *graph* (pointer to pointer to presynaptic): the graph.
+- *tau_e* (double): the excitatory time constant.
+- *d_e* (size_t): the excitatory delay.
+- *tau_i* (double): the inhibitory time constant.
+- *d_i* (size_t): the inhibitory delay.
+The function returns a double, the value of $u_{t+1}(i)$. I assume moreover that the two functions =g_e= and =g_i= returning the synaptic leak are available in the environment.
+
+#+NAME: get_u_i
+#+BEGIN_SRC C :eval never
+double get_u_i(size_t n_idx, int t,
+	       GArray **history, presynaptic **graph,
+	       double tau_e, size_t d_e,
+	       double tau_i, size_t d_i)
+{
+  double u_i=0.0;
+  // Get the time of the last spike of n_idx
+  int L_i = g_array_index(history[n_idx],int,history[n_idx]->len-1);
+  if (graph[n_idx]->size > 0)
+    {// n_idx has presynaptic neurons
+      for (size_t pre_idx=0; pre_idx<graph[n_idx]->size; pre_idx++)
+	{// Loop on the presynaptic neurons
+	  // Get the index of the presynaptic neuron
+	  uint j = gsl_vector_uint_get(graph[n_idx]->idx,pre_idx);
+	  // Get the synaptic weight
+	  double w = gsl_vector_get(graph[n_idx]->w,pre_idx);
+	  // Get the index of the last spike of neuron j
+	  size_t k = history[j]->len-1;
+	  // Get the time of the last spike of j
+	  int s = g_array_index(history[j],int,k);
+	  while (s > L_i)
+	    {
+	      if (w > 0) //excitatory synapse
+		u_i += w*g_e(t-s,tau_e,d_e);
+	      else //inhibitory synapse
+		u_i += w*g_i(t-s,tau_i,d_i);
+	      k--;
+	      if (k<0)
+		s = L_i;
+	      else
+		s = g_array_index(history[j],int,k);
+	    } // end of conditional on s > L_i  
+	} // end of the loop on pre_idx
+    } // end of the conditional on graph[n_idx]->size > 0
+  return u_i;
+}
+#+END_SRC 
+
+*** =varphi=
+
+Function =varphi= depends on three parameters:
+
+- *u* (double): the "membrane" potential of the considered neuron---returned by a call to =get_u_i=---.
+- *varphi_0* (double): the basal rate (should be larger than 0 and smaller than 1).
+- *k* (double): the constant controlling the steepness of the $\varphi$ function.
+
+#+NAME: varphi
+#+BEGIN_SRC C :eval never
+double varphi(double u, double varphi_0, double k)
+{
+  if (u < 0)
+    return varphi_0;
+  else
+    {
+#if defined(FAST_EXP)
+      return varphi_0 + (1-varphi_0)*gsl_pow_2 (1-EXP(-u/k));
+#else
+      return varphi_0 + (1-varphi_0)*gsl_pow_2 (1-exp(-u/k));
+#endif
+    }
+}
+#+END_SRC
+
+A program using =varphi= requires the directive =#include <gsl/gsl_math.h>=
+
+*** =spike_or_not=
+
+Function =spike_or_not= combines functions =get_u_i= and =varphi= and returns 0 if the neuron does not spike and 1 otherwise. It depends on the following parameters:
+
+- *n_idx* (size_t): the postsynaptic neuron index.
+- *t* (integer): the time index (the $t+1$ of the previous equations).
+- *history* (array of GArrays): the history.
+- *graph* (pointer to pointer to presynaptic): the graph.
+- *tau_e* (double): the excitatory time constant.
+- *d_e* (size_t): the excitatory delay.
+- *tau_i* (double): the inhibitory time constant.
+- *d_i* (size_t): the inhibitory delay.
+- *varphi_0* (double): the basal rate (should be larger than 0 and smaller than 1).
+- *k* (double): the constant controlling the steepness of the $\varphi$ function.
+- *r* (a pointer to a [[https://www.gnu.org/software/gsl/manual/html_node/Random-number-generator-initialization.html#Random-number-generator-initialization][gsl_rng]]): a pointer on an allocated =gsl_rng=.
+
+#+NAME: spike_or_not
+#+BEGIN_SRC C :eval never
+int spike_or_not(size_t n_idx, int t,
+		 GArray **history, presynaptic **graph,
+		 double tau_e, size_t d_e,
+		 double tau_i, size_t d_i,
+		 double varphi_0, double k,
+		 gsl_rng * r)
+{
+  double u = get_u_i(n_idx, t, history, graph,
+		     tau_e, d_e, tau_i, d_i);
+  if (gsl_ran_flat(r,0.0,1.0) <= varphi(u, varphi_0, k))
+    return 1;
+  else
+    return 0;
+}
+#+END_SRC
+
+*** =sim_params= structure and associated functions
+
+In order to have shorter parameters' list for our function call we define a new type, =sim_gl_params=, based on a structure that contains all the parameters passed by the user to the program:
+
+#+NAME: sim_gl_params
+#+BEGIN_SRC C :eval never
+typedef struct
+{
+  size_t n_neurons, d_e, d_i, total_steps, early_steps;
+  double p_e, w_e_min, w_e_max, p_i, w_i_min, w_i_max, varphi_0, \
+    varphi_k, tau_e, tau_i, nu_bar;
+  gsl_vector * G_e;
+  gsl_vector * G_i;
+} sim_gl_params;
+#+END_SRC
+
+The meaning of these structure members is specified in the =usage= function of our simulation program:
+
+#+NAME: print_usage_sim_gl
+#+BEGIN_SRC C :eval never
+void print_usage_sim_gl() {
+  printf("Usage: \n"
+	 "  --n_neurons <positive integer>: the number of neurons in "
+	 "the network\n"
+	 "  --p_e <double in (0,1)>: the probability of excitatory "
+	 "connection between two neurons\n"
+	 "  --w_e_min <positive double>: the minimal excitatory "
+	 "synaptic weight\n"
+	 "  --w_e_min <positive double>: the maximal excitatory "
+	 "synaptic weight\n"
+	 "  --tau_e <positive double>: the time constant of "
+	 "excitatory leak functions\n"
+	 "  --d_e <positive integer>: the excitatory synaptic delay\n"
+	 "  --p_i <double in (0,1)>: the probability of inhibitory "
+	 "connection between two neurons\n"
+	 "  --w_i_min <negative double>: the minimal inhibitory "
+	 "synaptic weight\n"
+	 "  --w_i_max <negative double>: the maximal inhibitory "
+	 "synaptic weight\n"
+	 "  --tau_i <positive double>: the time constant of "
+	 "inhibitory leak functions\n"
+	 "  --d_i <positive integer>: the inhibitory synaptic delay\n"
+	 "  --varphi_0 <double in (0,1)>: the basal value of the "
+	 "activation function\n"
+	 "  --varphi_k <positive double>: constant controlling the "
+	 "steepness of the activation function\n"
+	 "  --nu_bar <double in (0,1)>: the mean field rate\n"
+	 "  --early_steps <positive integer>: the number of time "
+	 "steps with IID draws\n"
+	 "  --total_steps <positive integer>: the total number of "
+	 "time steps to simulate\n"
+	 "\n");
+}
+#+END_SRC
+
+We now write the =<<read_par_sim_gl>>= code:
+
+#+NAME: read_par_sim_gl
+#+BEGIN_SRC C :eval never
+int read_par_sim_gl(int argc, char ** argv, sim_gl_params *p)
+{
+  // Define default values
+  
+  p->n_neurons = 800;
+  p->p_e = 0.1;
+  p->w_e_min = 0.2;
+  p->w_e_max = 0.3;
+  p->tau_e = 5;
+  p->d_e = 1;
+  p->p_i = 0.25;
+  p->w_i_min = -0.02;
+  p->w_i_max = -0.005;
+  p->tau_i = 5;
+  p->d_i = 4;
+  p->varphi_0 = 0.01;
+  p->varphi_k = 17;
+  p->nu_bar = 0.2217;
+  p->early_steps = 100;
+  p->total_steps = 60000;
+  {int opt;
+    static struct option long_options[] = {
+      {"n_neurons",optional_argument,NULL,'n'},
+      {"p_e",optional_argument,NULL,'a'},
+      {"w_e_min",optional_argument,NULL,'b'},
+      {"w_e_max",optional_argument,NULL,'c'},
+      {"p_i",optional_argument,NULL,'d'},
+      {"w_i_min",optional_argument,NULL,'e'},
+      {"w_i_max",optional_argument,NULL,'f'},
+      {"help",no_argument,NULL,'h'},
+      {"tau_e",optional_argument,NULL,'i'},
+      {"d_e",optional_argument,NULL,'j'},
+      {"tau_i",optional_argument,NULL,'k'},
+      {"d_i",optional_argument,NULL,'l'},
+      {"varphi_0",optional_argument,NULL,'m'},
+      {"varphi_k",optional_argument,NULL,'g'},
+      {"nu_bar",optional_argument,NULL,'o'},
+      {"early_steps",optional_argument,NULL,'p'},
+      {"total_steps",optional_argument,NULL,'q'},
+      {NULL,0,NULL,0}
+    };
+    int long_index =0;
+    while ((opt = getopt_long(argc,argv,
+			      "hn:a:b:c:d:e:f:g:i:j:k:l:m:o:p:q:",
+			      long_options,&long_index)) != -1) {
+      switch(opt) {
+      case 'n':
+	{
+	  int n=atoi(optarg);
+	  if (n <= 0)
+	    {
+	      fprintf(stderr,"The number of neurons should be > 0.\n");
+	      return -1;
+	    }
+	  p->n_neurons=(size_t) n; 
+	}
+	break;
+      case 'a': p->p_e=atof(optarg);
+	break;
+      case 'b': p->w_e_min=atof(optarg);
+	break;
+      case 'c': p->w_e_max=atof(optarg);
+	break;
+      case 'd': p->p_i=atof(optarg);
+	break;
+      case 'e': p->w_i_min=atof(optarg);
+	break;
+      case 'f': p->w_i_max=atof(optarg);
+	break;
+      case 'i': p->tau_e=atof(optarg);
+	break;
+      case 'j':
+	{
+	  int n=atoi(optarg);
+	  if (n <= 0)
+	    {
+	      fprintf(stderr,"The excitatory synaptic delay should "
+		      "be > 0.\n");
+	      return -1;
+	    }
+	  p->d_e=(size_t) n; 
+	}
+	break;
+      case 'k': p->tau_i=atof(optarg);
+	break;
+      case 'l':
+	{
+	  int n=atoi(optarg);
+	  if (n <= 0)
+	    {
+	      fprintf(stderr,"The inhibitory synaptic delay should "
+		      "be > 0.\n");
+	      return -1;
+	    }
+	  p->d_i=(size_t) n; 
+	}
+	break;
+      case 'm': p->varphi_0=atof(optarg);
+	break;
+      case 'g': p->varphi_k=atof(optarg);
+	break;
+      case 'o': p->nu_bar=atof(optarg);
+	break;
+      case 'p':
+	{
+	  int n=atoi(optarg);
+	  if (n <= 0)
+	    {
+	      fprintf(stderr,"The number of early steps should be "
+		      "> 0.\n");
+	      return -1;
+	    }
+	  p->early_steps=(size_t) n; 
+	}
+	break;
+      case 'q':
+	{
+	  int n=atoi(optarg);
+	  if (n <= 0)
+	    {
+	      fprintf(stderr,"The total number of steps should be "
+		      "> 0.\n");
+	      return -1;
+	    }
+	  p->total_steps=(size_t) n; 
+	}
+	break;
+      case 'h': print_usage_sim_gl();
+	return -1;
+      default : print_usage_sim_gl();
+	return -1;
+      }
+    }
+  }
+  // Check that the parameters are correct
+  if (p->p_e < 0 || p->p_e > 1)
+    {
+      fprintf(stderr,"We must have 0 <= p_e <= 1.\n");
+      return -1;
+    }
+  if (p->p_i < 0 || p->p_i > 1)
+    {
+      fprintf(stderr,"We must have 0 <= p_i <= 1.\n");
+      return -1;
+    }
+  if (p->w_e_min <= 0 || p->w_e_max <= 0)
+    {
+      fprintf(stderr,"Excitatory weights must be > 0.\n");
+      return -1;
+    }
+  if (p->w_e_min >= p->w_e_max)
+    {
+      fprintf(stderr,"We must have w_e_min < w_e_max.\n");
+      return -1;
+    }
+  if (p->w_i_min >= 0 || p->w_i_max >= 0)
+    {
+      fprintf(stderr,"Inhibitory weights must be < 0.\n");
+      return -1;
+    }
+  if (p->w_i_min >= p->w_i_max)
+    {
+      fprintf(stderr,"We must have w_i_min < w_i_max.\n");
+      return -1;
+    }
+  if (p->tau_i < 0)
+    {
+      fprintf(stderr,"We must have 0 <= tau_i.\n");
+      return -1;
+    }
+  if (p->tau_e < 0)
+    {
+      fprintf(stderr,"We must have 0 <= tau_e.\n");
+      return -1;
+    }
+  if (p->varphi_0 < 0 || p->varphi_0 > 1)
+    {
+      fprintf(stderr,"We must have 0 <= varphi_0 <= 1.\n");
+      return -1;
+    }
+  if (p->varphi_k <= 0)
+    {
+      fprintf(stderr,"We must have 0 < varphi_k.\n");
+      return -1;
+    }
+  if (p->nu_bar < 0 || p->nu_bar > 1)
+    {
+      fprintf(stderr,"We must have 0 <= nu_bar <= 1.\n");
+      return -1;
+    }
+  return 0;
+}
+#+END_SRC
+
+*** =mk_one_step=
+
+Function =mk_one_step= as its name says make a single time step of the algorithm. To that end is first assigns a vector of integers with as many elements as neurons in the network and with a binary content: 0 is the neuron does not spike during that step and 1 otherwise. The =history= array is then updated. The function takes the following parameters:
+
+- *t* (integer): the time index (the $t+1$ of the previous equations).
+- *history* (array of GArrays): the history.
+- *graph* (pointer to pointer to presynaptic): the graph.
+- *params* (pointer to a sim_gl_params): the structure containing the parameters passed to the program.
+- *r* (a pointer to a [[https://www.gnu.org/software/gsl/manual/html_node/Random-number-generator-initialization.html#Random-number-generator-initialization][gsl_rng]]): a pointer on an allocated =gsl_rng=.
+
+The function's definition is:
+
+#+NAME: mk_one_step
+#+BEGIN_SRC C :eval never
+int mk_one_step(int t,
+		GArray **history,
+		presynaptic **graph,
+		sim_gl_params * params,
+		gsl_rng * r)
+{
+  int res[params->n_neurons];
+  // Spike or no spike for each neuron
+  if (t < params->early_steps)
+    {
+      for (size_t n_idx=0; n_idx<params->n_neurons; n_idx++)
+	res[n_idx] = spike_or_not_early(params->nu_bar,r);
+    }
+  else
+    {
+      for (size_t n_idx=0; n_idx<params->n_neurons; n_idx++)
+	res[n_idx] = spike_or_not(n_idx, t, history, graph,
+				  params->tau_e,params->d_e,
+				  params->tau_i,params->d_i,
+				  params->varphi_0,params->varphi_k,
+				  r);
+      
+    }
+  // Upate history
+  for (size_t n_idx = 0; n_idx < params->n_neurons; n_idx++)
+    {
+      if (res[n_idx] == 1)
+	g_array_append_val(history[n_idx],t);
+    }
+  return 0;
+}
+#+END_SRC
+
+*** =write_sim_gl_preamble=
+
+Our =sim_gl= program is going to write its results to the =stdout= starting with a preamble (lines starting with a =#= interpreted as comments by =gnuplot=) containing the value of the parameters used. The function writing the preamble, =write_sim_gl_preamble= is defined next:
+
+#+NAME: write_sim_gl_preamble
+#+BEGIN_SRC C :eval never
+int write_sim_gl_preamble(sim_gl_params * params, gsl_rng * r)
+{
+  fprintf(stdout,"###########################################\n"
+	  "# Parameters used when running the program\n");
+  fprintf(stdout,"# The number of neurons is: %d\n",
+	  (int) params->n_neurons);
+  fprintf(stdout,"# Probability of excitatory connection: %g\n",
+	  params->p_e);
+  fprintf(stdout,"# Minimal excitatory weight: %g\n", params->w_e_min);
+  fprintf(stdout,"# Maximal excitatory weight: %g\n", params->w_e_max);
+  fprintf(stdout,"# Excitatory time constant: %g\n", params->tau_e);
+  fprintf(stdout,"# Excitatory time delay: %d\n", (int) params->d_e);
+  fprintf(stdout,"# Probability of inhibitory connection: %g\n",
+	  params->p_i);
+  fprintf(stdout,"# Minimal inhibitory weight: %g\n", params->w_i_min);
+  fprintf(stdout,"# Maximal inhibitory weight: %g\n", params->w_i_max);
+  fprintf(stdout,"# Inhibitory time constant: %g\n", params->tau_i);
+  fprintf(stdout,"# Inhibitory time delay: %d\n", (int) params->d_i);
+  fprintf(stdout,"# varphi_0: %g\n", params->varphi_0);
+  fprintf(stdout,"# varphi_k: %g\n", params->varphi_k);
+  fprintf(stdout,"# nu_bar: %g\n", params->nu_bar);
+  fprintf(stdout,"# early_steps: %d\n", (int) params->early_steps);
+  fprintf(stdout,"# total_steps: %d\n", (int) params->total_steps);
+  fprintf(stdout,"#\n");
+  fprintf(stdout,"# Generator type: %s\n", gsl_rng_name (r));
+  fprintf(stdout,"# Seed = %lu\n", gsl_rng_default_seed);
+  fprintf(stdout,"###########################################\n");
+  fprintf(stdout,"\n");
+  fprintf(stdout,"\n");
+  return 0;
+}
+#+END_SRC
+
+*** =write_sim_gl_results=
+
+At the end of its run the program will write to the =stdout= the spike trains of the neurons. This will be done neuron per neuron with two blank lines in between neurons (so that =gnuplot= automatically recognizes the different data set). The data from neuron =X= will start after a line like =# Start neuron X with N spikes= and will end with a line like =# End neuron X=:
+
+#+NAME: write_sim_gl_results
+#+BEGIN_SRC C :eval never 
+int write_sim_gl_results(size_t n_neurons, GArray **history)
+{
+  for (size_t n_idx = 0; n_idx < n_neurons; n_idx++)
+    {
+      fprintf(stdout,"# Start neuron %d with %d spikes\n",
+	      (int) n_idx, history[n_idx]->len);
+      for (size_t s_idx = 0; s_idx < history[n_idx]->len; s_idx++)
+	{
+	  fprintf(stdout,"%d\n", g_array_index(history[n_idx],int,s_idx));
+	}
+      fprintf(stdout,"# End neuron %d\n",(int) n_idx);
+      fprintf(stdout,"\n");
+      fprintf(stdout,"\n");
+    }
+  return 0;
+}
+#+END_SRC  
+
+*** Program =sim_gl=
+
+We end-up with the code of =sim_gl= that we save in a file called =sim_gl.c=:
+
+#+NAME: sim_gl
+#+BEGIN_SRC C :tangle sim_gl.c :noweb no-export
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <getopt.h>
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_math.h>
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_vector_uint.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+#include <glib.h>
+
+<<presynaptic>>
+
+presynaptic ** mk_graph(size_t n_neurons,
+			double p_e, double w_e_min, double w_e_max,
+			double p_i, double w_i_min, double w_i_max,
+			gsl_rng * r);
+
+int free_graph(presynaptic **graph, size_t n_neurons);
+
+GArray ** malloc_garrays2(size_t n_neurons);
+
+int free_garrays2(GArray ** history, size_t n_neurons);
+
+<<Schraudolph-exp>>
+
+<<sim_gl_params>>
+
+int write_sim_gl_results(size_t n_neurons, GArray **history);
+
+int write_sim_gl_preamble(sim_gl_params * params, gsl_rng * r);
+
+int mk_one_step(int t,
+		GArray **history,
+		presynaptic **graph,
+		sim_gl_params * params,
+		gsl_rng * r);
+
+int read_par_sim_gl(int argc, char ** argv, sim_gl_params *p);
+
+void print_usage_sim_gl();
+
+int spike_or_not(size_t n_idx, int t,
+		 GArray **history, presynaptic **graph,
+		 double tau_e, size_t d_e,
+		 double tau_i, size_t d_i,
+		 double varphi_0, double k,
+		 gsl_rng * r);
+
+double varphi(double u, double varphi_0, double k);
+
+double get_u_i(size_t n_idx, int t,
+	       GArray **history, presynaptic **graph,
+	       double tau_e, size_t d_e,
+	       double tau_i, size_t d_i);
+
+int spike_or_not_early(double nu_bar,
+		       gsl_rng * r);
+
+double g_i(size_t delay, double tau_i, size_t d_i);
+
+double g_e(size_t delay, double tau_e, size_t d_e);
+
+gsl_vector * G_i(double tau_i, size_t d_i);
+
+gsl_vector * G_e(double tau_e, size_t d_e);
+
+int main(int argc, char ** argv)
+{
+  sim_gl_params params;
+  // Read and check parameters
+  int status = read_par_sim_gl(argc, argv, &params);
+
+  if (status == -1) exit (EXIT_FAILURE);
+  
+  params.G_e = G_e(params.tau_e, params.d_e);
+  params.G_i = G_i(params.tau_i, params.d_i);
+
+  // Initialize RNG
+  const gsl_rng_type * T;
+  gsl_rng * r;
+  gsl_rng_env_setup();
+
+  T = gsl_rng_default;
+  r = gsl_rng_alloc (T);
+
+  // Generate network
+  presynaptic **graph=mk_graph(params.n_neurons,
+			       params.p_e, params.w_e_min,
+			       params.w_e_max,
+			       params.p_i, params.w_i_min,
+			       params.w_i_max, r);
+
+  // Allocate history
+  GArray **history = malloc_garrays2 (params.n_neurons);
+
+  // Write preamble
+  write_sim_gl_preamble(&params, r);
+  
+  // Do the job
+  for (int step_idx=0; step_idx < (int) params.total_steps; step_idx++)
+    {
+      mk_one_step(step_idx, history, graph, &params, r);
+    }
+
+  // Write results
+  write_sim_gl_results(params.n_neurons, history);
+  
+  // Free memory taken up by history
+  free_garrays2(history,params.n_neurons);
+  
+  gsl_rng_free (r);
+  gsl_vector_free(params.G_e);
+  gsl_vector_free(params.G_i);
+  free_graph(graph, params.n_neurons);
+  exit (EXIT_SUCCESS);
+}
+
+<<G_i>>
+
+<<G_e>>
+
+<<g_i>>
+
+<<g_e>>
+
+<<spike_or_not_early>>
+
+<<get_u_i>>
+
+<<varphi>>
+
+<<spike_or_not>>
+
+<<print_usage_sim_gl>>
+
+<<read_par_sim_gl>>
+
+<<mk_one_step>>
+
+<<write_sim_gl_preamble>>
+
+<<write_sim_gl_results>>
+
+<<malloc_garrays2>>
+
+<<free_garrays2>>
+
+<<mk_graph>>
+
+<<free_graph>>
+#+END_SRC
+
+We compile it with:
+
+#+NAME: sim_gl-compile
+#+BEGIN_SRC shell :exports both :results output
+make P=sim_gl
+#+END_SRC
+
+#+RESULTS: sim_gl-compile
+: cc `pkg-config --cflags glib-2.0` -g -Wall -O3 -std=gnu11 \
+:    sim_gl.c  `pkg-config --libs glib-2.0 gsl `  -o sim_gl
+
+We can get the help with
+
+#+NAME: sim_gl-help
+#+BEGIN_SRC shell :exports both :results output 
+./sim_gl --help
+#+END_SRC
+
+#+RESULTS: sim_gl-help
+
+We run it with 10000 time steps (this takes 190 seconds on my slow computer):
+
+#+NAME: sim_gl-run
+#+BEGIN_SRC shell :exports both :results output
+time ./sim_gl --total_steps=10000 > sim_gl_test0.txt
+#+END_SRC
+
+#+RESULTS: sim_gl-run
+
+We can see the first 50 lines of the file containing the results:
+
+#+BEGIN_SRC shell :exports both :results output
+head -n 50 sim_gl_test0.txt
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+###########################################
+# Parameters used when running the program
+# The number of neurons is: 800
+# Probability of excitatory connection: 0.1
+# Minimal excitatory weight: 0.2
+# Maximal excitatory weight: 0.3
+# Excitatory time constant: 5
+# Excitatory time delay: 1
+# Probability of inhibitory connection: 0.25
+# Minimal inhibitory weight: -0.02
+# Maximal inhibitory weight: -0.005
+# Inhibitory time constant: 5
+# Inhibitory time delay: 4
+# varphi_0: 0.01
+# varphi_k: 17
+# nu_bar: 0.2217
+# early_steps: 100
+# total_steps: 10000
+#
+# Generator type: mt19937
+# Seed = 0
+###########################################
+
+
+# Start neuron 0 with 191 spikes
+3
+5
+8
+14
+16
+20
+24
+25
+29
+35
+36
+37
+51
+54
+55
+60
+67
+69
+71
+72
+82
+87
+98
+101
+108
+#+end_example
+
+We can then make a raster plot with the first 10 of the 800 neurons:
+
+#+NAME: sim_gl_test0-raster
+#+BEGIN_SRC gnuplot :session *gnuplot* :file sim_gl_test0-raster.png :exports both
+set xlabel "Time step"
+set ylabel ""
+unset key
+plot [0:10000] [-1:10] "sim_gl_test0.txt" index 0 using 1:(0) with dots, \
+     "" index 1 using 1:(1) with dots, \
+     "" index 2 using 1:(2) with dots, \
+     "" index 3 using 1:(3) with dots, \
+     "" index 4 using 1:(4) with dots, \
+     "" index 5 using 1:(5) with dots, \
+     "" index 6 using 1:(6) with dots, \
+     "" index 7 using 1:(7) with dots, \
+     "" index 8 using 1:(8) with dots, \
+     "" index 9 using 1:(9) with dots
+#+END_SRC
+
+#+RESULTS: sim_gl_test0-raster
+[[file:sim_gl_test0-raster.png]]
+
+We can recompile the code with the =-DFAST_EXP= option in order to get the fast exponential version with: 
+
+#+NAME: sim_gl-compile2
+#+BEGIN_SRC shell :exports both :results output
+mv sim_gl sim_gl0
+CFLAGS=-DFAST_EXP make P=sim_gl
+#+END_SRC
+
+#+RESULTS: sim_gl-compile2
+: cc -DFAST_EXP `pkg-config --cflags glib-2.0` -g -Wall -O3 -std=gnu11 \
+:    sim_gl.c  `pkg-config --libs glib-2.0 gsl `  -o sim_gl
+
+And we run it again with (it takes 83 seconds this time):
+
+#+NAME: sim_gl-run2
+#+BEGIN_SRC shell :exports both :results output
+time ./sim_gl --total_steps=10000 > sim_gl_test1.txt
+#+END_SRC
+
+A "full" comparison using the default parameters (800 neurons and 60$\times 10^3$ time steps) on my laptop runs in 19 min. and 12 sec. for the =math= library =exp= function and 8 min. 15 sec. with the =fast exp= macro.
+
+We can also compute the instantaneous rate of a neuron (an estimate of the spiking probability of a single neuron) from our simulated data as follows. We first remove all the comments from the data file =sim_gl_test0.txt= with:
+
+#+NAME: process-sim_gl_test0.txt
+#+BEGIN_SRC shell 
+grep "^[[:digit:]]" sim_gl_test0.txt > sim_gl_test0_spike_only
+#+END_SRC 
+
+#+RESULTS: process-sim_gl_test0.txt
+
+We then use =gnuplot= to make our graph:
+
+#+NAME: sim_gl_test0_rate
+#+BEGIN_SRC gnuplot :session *gnuplot* :file sim_gl_test0_rate.png :exports both
+unset key
+set grid
+set xlabel "Time step"
+set ylabel ""
+set label 1 "Single neuron spike frequency" at 30000,0.045
+plot [0:60000] [0:0.05] "sim_gl_test0_spike_only" u 1:(1./800) \
+     smooth frequency with lines linecolor rgb "black"
+#+END_SRC
+
+#+RESULTS: sim_gl_test0_rate
+[[file:sim_gl_test0_rate.png]]
+
+* Analysis
+** Extracting single neuron spike trains the "elementary way"
+As explained the content of the data file is made first of the simulation parameters (so that the simulation can be /exactly reproduced/) and is then made of the spike times of the individual neurons from the first to the last. Each spike train starts with: =# Start neuron X with Y spikes=, and ends with: =# End neuron X=. It is then straightforward to use the =Linux/Unix= command line tools to extract the spike train of neuron 0 (we start counting at 0) from data file =sim_gl_test0.txt=. We use =sed= end store the result in a file called =sim_gl_test0_st_n0= as follows:
+
+#+NAME: extract-spike-train-from-sim_gl_test0.txt
+#+BEGIN_SRC shell
+sed '1,/# Start neuron 0 with/d;/# End neuron 0/,$d' sim_gl_test0.txt \
+    > sim_gl_test0_st_n0
+#+END_SRC
+
+#+RESULTS: extract-spike-train-from-sim_gl_test0.txt
+
+We check that no major problem occurred by making sure we have the right number of spikes. In the original file, for neuron 0 we had:
+
+#+NAME: get-number-of-sipkes-of-n0-in-sim_gl_test0.txt
+#+BEGIN_SRC shell :exports both :results output
+grep "# Start neuron 0 with" sim_gl_test0.txt
+#+END_SRC
+
+#+RESULTS: get-number-of-sipkes-of-n0-in-sim_gl_test0.txt
+: # Start neuron 0 with 947 spikes
+
+We see that the original file contains 947 spikes for neuron 0. In our new file we have:
+
+#+NAME: get-number-of-sipkes-of-sim_gl_test0_st_n0
+#+BEGIN_SRC shell :exports both :results output
+wc -l sim_gl_test0_st_n0
+#+END_SRC
+
+#+RESULTS: get-number-of-sipkes-of-sim_gl_test0_st_n0
+: 947 sim_gl_test0_st_n0
+
+So everything looks OK. A quick and somewhat dirty way to get the histogram of the inter spike interval for this neuron is first to create a file with two columns, the first column containing the spike times from the 51st spike to the one before the end (we start at 51 to "forget" about the initialization) and the second from the 52d to the end:
+
+#+NAME: mk-sim_gl_test0_st_n0_diff
+#+BEGIN_SRC shell
+sed -n '51,946p' sim_gl_test0_st_n0 > first
+sed -n '52,$p' sim_gl_test0_st_n0 > second
+paste second first > mk-sim_gl_test0_st_n0_diff
+#+END_SRC
+
+Then with =gnuplot=:
+
+#+NAME: sim_gl_test0_st_n0_diff_hist
+#+BEGIN_SRC gnuplot :session *gnuplot* :file sim_gl_test0_st_n0_diff_hist.png :exports both
+binc(x,s) = s*(floor(x/s)+0.5)
+set boxwidth 5
+unset key
+set xlabel "Inter spike interval"
+set ylabel "Estimated probability"
+plot [0:400] [] "both" u (binc($1-$2,5)):(1./(5*896)) smooth frequency\
+     with boxes
+#+END_SRC
+
+#+RESULTS: sim_gl_test0_st_n0_diff_hist
+[[file:sim_gl_test0_st_n0_diff_hist.png]]
+
+** Doing the same job with =R=
+
+To get a quick access to spike train analysis routines, we will write a short =R= function to read into =R= the output of the simulation code and we will then be able to use the [[https://cran.r-project.org/web/packages/STAR/index.html][STAR]] package--this means of course that you will need =R= and =STAR= on your computer--. To make sure that everything is there, start =R= and type (if you get a message "there is no package called ‘STAR’" type first =install.packages("STAR")=):
+
+#+NAME: load-STAR
+#+BEGIN_SRC R :exports both :session *R* :results output
+library(STAR)
+#+END_SRC
+
+#+RESULTS: load-STAR
+: Le chargement a nécessité le package : survival
+: Le chargement a nécessité le package : mgcv
+: Le chargement a nécessité le package : nlme
+: This is mgcv 1.8-12. For overview type 'help("mgcv-package")'.
+: Le chargement a nécessité le package : R2HTML
+: Le chargement a nécessité le package : gss
+: Le chargement a nécessité le package : codetools
+
+To write our data file parser, we have to remember (or to go back to our [[write_sim_gl_preamble][write_sim_gl_preamble]] section) that our "preamble" occupies 22 lines and that the third lines is something like: =# The number of neurons is: X=. At that stage we want to get the number of neurons contained in the simulated network, combining function =readLines=, =strsplit= and =as.interger= will do the job as illustrated next:
+
+#+NAME: get-number-of-neurons-in-R
+#+BEGIN_SRC R :exports both :session *R*
+preamble <- readLines("sim_gl_test0.txt",n=22)
+(n_neurons <- as.integer(strsplit(preamble[3],split=": ")[[1]][2]))
+#+END_SRC
+
+#+RESULTS: get-number-of-neurons-in-R
+: 800
+
+We then know that we are dealing (in that case) with 800 spike trains. After the preamble we have a repeated pattern, one for each neuron:
+
+- Two blank lines.
+- A statement like =# Start neuron X with Y spikes=.
+- =Y= lines each with one spike time.
+- A statement like =# End neuron X=.
+
+To be able to move to an arbitrary line within the file we will now use the =scan= function. With this function we can get the number of spikes generated by the first neuron (neuron with number 0):
+
+#+NAME: how-many-spike-from-neuron-0-in-R
+#+BEGIN_SRC R :exports both :session *R* :results output
+(intro <- scan("sim_gl_test0.txt",skip=24,nlines=1,what="character"))
+(n <- as.integer(intro[6]))
+#+END_SRC 
+
+#+RESULTS: how-many-spike-from-neuron-0-in-R
+: Read 7 items
+: [1] "#"      "Start"  "neuron" "0"      "with"   "947"    "spikes"
+: [1] 947
+
+We can then read the spike train of neuron 0 with:
+
+#+NAME: spike-from-neuron-0-in-R
+#+BEGIN_SRC R :session *R* :exports both :results output
+st0 <- scan("sim_gl_test0.txt",skip=25,nlines=947,what=integer())
+#+END_SRC
+
+#+RESULTS: spike-from-neuron-0-in-R
+: Read 947 items
+
+We can reconstruct the inter spike interval density estimation as follows:
+
+#+NAME: isi-from-neuron-0-density-in-R
+#+BEGIN_SRC R :session *R* :exports both :results output graphics :file isi_from_neuron_0_density_in_R.png
+isi0 <- diff(st0[52:947])
+hist(isi0,seq(0,400,5),freq=FALSE,xlab="Inter spike interval",
+     ylab="Estimated probability")
+#+END_SRC
+
+#+RESULTS: isi-from-neuron-0-density-in-R
+[[file:isi_from_neuron_0_density_in_R.png]]
+
+We transform this vector into a =spikeTrain= object of =START= with:
+
+#+NAME: spike-train-from-neuron-0-in-R
+#+BEGIN_SRC R :session *R* :exports both :results output
+st0 <- as.spikeTrain(st0)
+summary(st0)
+#+END_SRC
+
+#+RESULTS: spike-train-from-neuron-0-in-R
+: A spike train with 947 events, starting at: 3 and ending at: 59967 (s).
+: The mean ISI is: 63.387 and its SD is: 62.686 (s).
+: The mean log(ISI) is: 3.617 and its SD is: 1.164
+: The shortest interval is: 1
+:  and the longest is: 394 (s).
+
+We can now write a function that reads the whole content of the data file and sends its result as a =list= of =spikeTrain= objects:
+
+#+NAME: read_sim_file-definition
+#+BEGIN_SRC R :session *R* :results silent
+read_sim_file <- function(filename) {
+    preamble <- readLines(filename,n=22)
+    n_neurons <- as.integer(strsplit(preamble[3],split=": ")[[1]][2])
+    res <- vector("list",n_neurons)
+    n_skip = 22
+    for (n_idx in 1:n_neurons) {
+        intro <- scan(filename,skip=n_skip+2,nlines=1,what="character")
+        n <- as.integer(intro[6])
+        res[[n_idx]] <- as.spikeTrain(scan(filename,
+                                           skip=n_skip+3,
+                                           nlines=n,
+                                           what=integer()))
+        n_skip = n_skip + 4 + n
+    }
+    res
+}
+#+END_SRC
+
+We use it with (it takes a couple of minutes ti run):
+
+#+NAME: read-all-sim_gl_test0
+#+BEGIN_SRC R :session *R* :results silent
+stList <- read_sim_file("sim_gl_test0.txt")
+#+END_SRC
+
+And we can use the =STAR= functions to look for cross-correlations like here between neuron 1 and neuron 19 (counting now from 1 as =R= does):
+
+#+NAME: sim_gl_test0_cc_n1_n19
+#+BEGIN_SRC R :session *R* :exports both :results output graphics :file sim_gl_test0_cc_n1_n19.png
+hist(lockedTrain(stList[[1]],stList[[19]],laglim=50*c(-1,1)),bw=2)
+#+END_SRC
+
+#+RESULTS: sim_gl_test0_cc_n1_n19
+[[file:sim_gl_test0_cc_n1_n19.png]]
+
+* Tests, examples and how to
+** Changing the rng's seed and type 
+The =gsl= (pseudo-)random number generators (=rng=) can be selected via an [[https://www.gnu.org/software/gsl/manual/html_node/Random-number-environment-variables.html#Random-number-environment-variables][environment variable]], =GSL_RNG_TYPE=, while the seed can be specified via the environment variable =GSL_RNG_SEED=. The different rng types implemented in the =gsl= are described in the [[https://www.gnu.org/software/gsl/manual/html_node/Random-number-generator-algorithms.html#Random-number-generator-algorithms][documentation]]. Here is a quick example with only 1000 steps, using the default parameters and setting the rng type to =cmrg= and the seed to Clara Zetkin birthday (1857-07-05):
+
+#+NAME: example_of_rng_type_and_seed_setting
+#+BEGIN_SRC shell :exports both :results output
+GSL_RNG_TYPE=cmrg GSL_RNG_SEED=18570705 \
+	    ./sim_gl --total_steps=1000 > sim_gl_test_rng.txt
+head -n 22 sim_gl_test_rng.txt
+#+END_SRC
+
+#+RESULTS: example_of_rng_type_and_seed_setting
+#+begin_example
+###########################################
+# Parameters used when running the program
+# The number of neurons is: 800
+# Probability of excitatory connection: 0.1
+# Minimal excitatory weight: 0.2
+# Maximal excitatory weight: 0.3
+# Excitatory time constant: 5
+# Excitatory time delay: 1
+# Probability of inhibitory connection: 0.25
+# Minimal inhibitory weight: -0.02
+# Maximal inhibitory weight: -0.005
+# Inhibitory time constant: 5
+# Inhibitory time delay: 4
+# varphi_0: 0.01
+# varphi_k: 17
+# nu_bar: 0.2217
+# early_steps: 100
+# total_steps: 1000
+#
+# Generator type: cmrg
+# Seed = 18570705
+###########################################
+#+end_example
+
+We see here that the type and seed of the rng have changed (last two lines) compared to their default values.
+
+** Checking that our code is doing what it is supposed to do
+We will write a program that simulates a network made of 2 neurons where neuron 1 excites neuron 2 and neuron 2 inhibits neuron 1. This program will output $u_1$ and $u_2$ (the pseudo membrane potential) of each neuron at each type step in addition to the spike trains. We will set the weight of the excitatory input to 1 and the one of the inhibitory to -4, while the steepness of the $\varphi$ function is going to be set at 1. The simulation parameters are now contained in declarations (as opposed to passed as program parameters):
+
+#+NAME: sim_2_neurons_params
+#+BEGIN_SRC C :eval never
+#define W_E 1.0
+#define W_I -4.0
+#define VARPHI_0 0.005
+#define VARPHI_K 1.0
+#define N_NEURONS 2
+#define TAU_E 10.0
+#define D_E 1
+#define TAU_I 25.0
+#define D_I 5
+#define NU_BAR 0.05
+#define EARLY_STEPS 1000
+#define TOTAL_STEPS 10000
+#+END_SRC
+
+We start by modifying function =mk_one_step= such that the new function =mk_one_step_2n= takes two additional parameters, pointers to =gsl_vector= variables, that contain the membrane potential values:
+
+#+NAME: mk_one_step_2n
+#+BEGIN_SRC C :eval never
+int mk_one_step_2n(int t,
+		   GArray **history,
+		   presynaptic **graph,
+		   sim_gl_params * params,
+		   gsl_rng * r,
+		   gsl_vector * u_0,
+		   gsl_vector * u_1)
+{
+  int res[N_NEURONS];
+  double u;
+  // Spike or no spike for each neuron
+  if (t < EARLY_STEPS)
+    {
+      res[0] = spike_or_not_early(NU_BAR,r);
+      gsl_vector_set(u_0,(size_t) t,0.0);
+      res[1] = spike_or_not_early(NU_BAR,r);
+      gsl_vector_set(u_1,(size_t) t,0.0);
+    }
+  else
+    {
+      // Neuron 0
+      u = get_u_i(0, t, history, graph,
+		  TAU_E, D_E, TAU_I, D_I);
+      gsl_vector_set(u_0,(size_t) t,u);
+      if (gsl_ran_flat(r,0.0,1.0) <= varphi(u, VARPHI_0, VARPHI_K))
+	res[0]=1;
+      else
+	res[0]=0;
+      // Neuron 1
+      u = get_u_i(1, t, history, graph,
+		  TAU_E, D_E, TAU_I, D_I);
+      gsl_vector_set(u_1,(size_t) t,u);
+      if (gsl_ran_flat(r,0.0,1.0) <= varphi(u, VARPHI_0, VARPHI_K))
+	res[1]=1;
+      else
+	res[1]=0;
+    }
+  // Upate history
+  for (size_t n_idx = 0; n_idx < N_NEURONS; n_idx++)
+    {
+      if (res[n_idx] == 1)
+	g_array_append_val(history[n_idx],t);
+    }
+  return 0;
+}
+#+END_SRC
+
+We know define the program and save it in a file called =sim_2_neurons.c=. The output contains, in addition to the spike trains and after them, two columns with $u_1$ and $u_2$ (this is dealt with in function =write_sim_2n_results= defined bellow the =main= function, an adaptation of =write_sim_results=): 
+
+#+NAME: sim_2_neurons
+#+BEGIN_SRC C :tangle sim_2_neurons.c :noweb no-export
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <getopt.h>
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_math.h>
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_vector_uint.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+#include <glib.h>
+
+<<sim_2_neurons_params>>
+
+<<presynaptic>>
+
+int free_graph(presynaptic **graph, size_t n_neurons);
+
+GArray ** malloc_garrays2(size_t n_neurons);
+
+int free_garrays2(GArray ** history, size_t n_neurons);
+
+<<Schraudolph-exp>>
+
+<<sim_gl_params>>
+
+int write_sim_2n_results(size_t n_neurons, GArray **history,
+			 gsl_vector * u_0,
+			 gsl_vector * u_1);
+
+int write_sim_gl_preamble(sim_gl_params * params, gsl_rng * r);
+
+int mk_one_step_2n(int t,
+		   GArray **history,
+		   presynaptic **graph,
+		   sim_gl_params * params,
+		   gsl_rng * r,
+		   gsl_vector * u_0,
+		   gsl_vector * u_1);
+
+
+double varphi(double u, double varphi_0, double k);
+
+double get_u_i(size_t n_idx, int t,
+	       GArray **history, presynaptic **graph,
+	       double tau_e, size_t d_e,
+	       double tau_i, size_t d_i);
+
+int spike_or_not_early(double nu_bar,
+		       gsl_rng * r);
+
+double g_i(size_t delay, double tau_i, size_t d_i);
+
+double g_e(size_t delay, double tau_e, size_t d_e);
+
+gsl_vector * G_i(double tau_i, size_t d_i);
+
+gsl_vector * G_e(double tau_e, size_t d_e);
+
+int main(void)
+{
+  sim_gl_params params={
+    .n_neurons=N_NEURONS,.d_e=D_E, .d_i=D_I, .total_steps=TOTAL_STEPS,
+    .early_steps=EARLY_STEPS, .p_e=1.0, .p_i=1.0, .w_e_max=W_E,
+    .w_e_min=W_E, .w_i_max=W_I, .w_i_min=W_I, .varphi_0=VARPHI_0,
+    .varphi_k=VARPHI_K, .tau_e=TAU_E, .tau_i=TAU_I, .nu_bar=NU_BAR,
+    .G_e=G_e(TAU_E, D_E),.G_i=G_i(TAU_I, D_I) 
+  };
+
+  // Initialize RNG
+  const gsl_rng_type * T;
+  gsl_rng * r;
+  gsl_rng_env_setup();
+
+  T = gsl_rng_default;
+  r = gsl_rng_alloc (T);
+
+  // allocate memory for the network
+  presynaptic **graph = malloc(N_NEURONS*sizeof(presynaptic*));
+  graph[0] = malloc(sizeof(presynaptic));
+  graph[0]->size=1;
+  graph[0]->w = gsl_vector_alloc(1);
+  graph[0]->idx = gsl_vector_uint_alloc(1);
+  graph[1] = malloc(sizeof(presynaptic));
+  graph[1]->size=1;
+  graph[1]->w = gsl_vector_alloc(1);
+  graph[1]->idx = gsl_vector_uint_alloc(1);
+  // Initialize the network
+  gsl_vector_uint_set(graph[0]->idx,0,1);
+  gsl_vector_set(graph[0]->w,0,W_I);
+  gsl_vector_uint_set(graph[1]->idx,0,0);
+  gsl_vector_set(graph[1]->w,0,W_E);
+
+  // allocate vectors containing u_0 and u_1
+  gsl_vector * u_0 = gsl_vector_alloc(TOTAL_STEPS);
+  gsl_vector * u_1 = gsl_vector_alloc(TOTAL_STEPS);
+
+  // Allocate history
+  GArray **history = malloc_garrays2 (params.n_neurons);
+
+  // Write preamble
+  write_sim_gl_preamble(&params, r);
+
+  // Do the job
+  for (int step_idx=0; step_idx < (int) TOTAL_STEPS; step_idx++)
+    {
+      mk_one_step_2n(step_idx, history, graph, &params,
+		     r, u_0, u_1);
+    }
+
+  // Write results
+  write_sim_2n_results(params.n_neurons, history, u_0, u_1);
+
+  // Free memory taken up by history
+  free_garrays2(history,params.n_neurons);
+
+  gsl_vector_free(u_0);
+  gsl_vector_free(u_1);
+  gsl_rng_free (r);
+  gsl_vector_free(params.G_e);
+  gsl_vector_free(params.G_i);
+  free_graph(graph, params.n_neurons);
+  exit (EXIT_SUCCESS);
+  
+}
+
+<<mk_one_step_2n>>
+
+int write_sim_2n_results(size_t n_neurons, GArray **history,
+			 gsl_vector * u_0,
+			 gsl_vector * u_1)
+{
+  for (size_t n_idx = 0; n_idx < n_neurons; n_idx++)
+    {
+      fprintf(stdout,"# Start neuron %d with %d spikes\n",
+	      (int) n_idx, history[n_idx]->len);
+      for (size_t s_idx = 0; s_idx < history[n_idx]->len; s_idx++)
+	{
+	  fprintf(stdout,"%d\n", g_array_index(history[n_idx],
+					       int,s_idx));
+	}
+      fprintf(stdout,"# End neuron %d\n",(int) n_idx);
+      fprintf(stdout,"\n");
+      fprintf(stdout,"\n");
+    }
+  fprintf(stdout,"# u_0\t u_1\n");
+  for (size_t t_idx=0; t_idx < TOTAL_STEPS; t_idx++)
+    fprintf(stdout,"%10.5g\t %10.5g\n",gsl_vector_get(u_0,t_idx),
+	    gsl_vector_get(u_1,t_idx));
+  return 0;
+}
+
+<<write_sim_gl_preamble>>
+
+<<G_i>>
+
+<<G_e>>
+
+<<g_i>>
+
+<<g_e>>
+
+<<spike_or_not_early>>
+
+<<get_u_i>>
+
+<<varphi>>
+
+<<malloc_garrays2>>
+
+<<free_garrays2>>
+
+<<free_graph>>
+#+END_SRC  
+
+We compile the code with:
+
+#+NAME: sim_2_neurons-compile
+#+BEGIN_SRC shell :results output :exports both
+make P=sim_2_neurons
+#+END_SRC 
+
+#+RESULTS: sim_2_neurons-compile
+: cc `pkg-config --cflags glib-2.0` -g -Wall -O3 -std=gnu11     sim_2_neurons.c  `pkg-config --libs glib-2.0 gsl `  -o sim_2_neurons
+
+We run the code with:
+
+#+NAME: sim_2_neurons-run
+#+BEGIN_SRC shell :results output :exports both
+./sim_2_neurons > sim_2_neurons_0.txt
+#+END_SRC
+
+#+RESULTS: sim_2_neurons-run
+
+And we plot part of the result with:
+
+#+NAME: sim_2_neurons_0_fig
+#+BEGIN_SRC gnuplot :session *gnuplot* :file sim_2_neurons_0_fig.png :exports both
+set grid
+set xlabel "Time step"
+set ylabel ""
+set key bottom left
+plot [7300:7900] [-5:2] "sim_2_neurons_0.txt" \
+     index 2 u 0:1 title "u_0" w l lw 2,\
+     "" index 2 u 0:2 title "u_1" w l lw 2,\
+     "" index 0 u 1:(1.5) title "spikes of neuron 0" w impulses lw 2, \
+     "" index 1 u 1:(-1.5) title "spikes of neuron 1" w impulses lw 2 
+#+END_SRC
+
+#+RESULTS: sim_2_neurons_0_fig
+[[file:sim_2_neurons_0_fig.png]]
+
+Here we see by chance a spike in both neurons at time step 7687, the excitatory effect of neuron 0 on neuron 1 is there and is curtailed everytime neuron 1 fires, the same goes for the longer lasting inhibitory effect of neuron 1 on neuron 0. As expected, we get fewer spikes from neuron 0:
+
+#+NAME: sim_2_neurons_0-spikes-from-n0
+#+BEGIN_SRC shell :results output :exports both
+grep "# Start neuron 0" sim_2_neurons_0.txt 
+#+END_SRC
+
+#+RESULTS: sim_2_neurons_0-spikes-from-n0
+: # Start neuron 0 with 102 spikes
+
+than from neuron 1:
+
+#+NAME: sim_2_neurons_0-spikes-from-n1
+#+BEGIN_SRC shell :results output :exports both
+grep "# Start neuron 1" sim_2_neurons_0.txt 
+#+END_SRC
+
+#+RESULTS: sim_2_neurons_0-spikes-from-n1
+: # Start neuron 1 with 144 spikes
+
+This part of the code seems to be doing its job.
+
+** Checking that our code is doing what it is supposed to do (2)
+
+We repeat what we just made but now neuron 1 excites and inhibits 0. The code is written in file =sim_2_neuronsB.c= and we just change lines 80-92 of =sim_2_neurons.c= for:
+
+#+NAME: sim_2_neurons_to_sim_2_neuronsB
+#+BEGIN_SRC C :eval never
+  graph[0] = malloc(sizeof(presynaptic));
+  graph[0]->size=2;
+  graph[0]->w = gsl_vector_alloc(2);
+  graph[0]->idx = gsl_vector_uint_alloc(2);
+  graph[1] = malloc(sizeof(presynaptic));
+  graph[1]->size=1;
+  graph[1]->w = gsl_vector_alloc(1);
+  graph[1]->idx = gsl_vector_uint_alloc(1);
+  // Initialize the network
+  gsl_vector_uint_set(graph[0]->idx,0,1);
+  gsl_vector_set(graph[0]->w,0,W_I);
+  gsl_vector_uint_set(graph[0]->idx,1,1);
+  gsl_vector_set(graph[0]->w,1,W_E);
+  gsl_vector_uint_set(graph[1]->idx,0,0);
+  gsl_vector_set(graph[1]->w,0,W_E);
+#+END_SRC
+
+#+NAME: sim_2_neuronsB
+#+BEGIN_SRC C :tangle sim_2_neuronsB.c :noweb no-export :exports none
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <getopt.h>
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_math.h>
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_vector_uint.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+#include <glib.h>
+
+<<sim_2_neurons_params>>
+
+<<presynaptic>>
+
+int free_graph(presynaptic **graph, size_t n_neurons);
+
+GArray ** malloc_garrays2(size_t n_neurons);
+
+int free_garrays2(GArray ** history, size_t n_neurons);
+
+<<Schraudolph-exp>>
+
+<<sim_gl_params>>
+
+int write_sim_2n_results(size_t n_neurons, GArray **history,
+			 gsl_vector * u_0,
+			 gsl_vector * u_1);
+
+int write_sim_gl_preamble(sim_gl_params * params, gsl_rng * r);
+
+int mk_one_step_2n(int t,
+		   GArray **history,
+		   presynaptic **graph,
+		   sim_gl_params * params,
+		   gsl_rng * r,
+		   gsl_vector * u_0,
+		   gsl_vector * u_1);
+
+
+double varphi(double u, double varphi_0, double k);
+
+double get_u_i(size_t n_idx, int t,
+	       GArray **history, presynaptic **graph,
+	       double tau_e, size_t d_e,
+	       double tau_i, size_t d_i);
+
+int spike_or_not_early(double nu_bar,
+		       gsl_rng * r);
+
+double g_i(size_t delay, double tau_i, size_t d_i);
+
+double g_e(size_t delay, double tau_e, size_t d_e);
+
+gsl_vector * G_i(double tau_i, size_t d_i);
+
+gsl_vector * G_e(double tau_e, size_t d_e);
+
+int main(void)
+{
+  sim_gl_params params={
+    .n_neurons=N_NEURONS,.d_e=D_E, .d_i=D_I, .total_steps=TOTAL_STEPS,
+    .early_steps=EARLY_STEPS, .p_e=1.0, .p_i=1.0, .w_e_max=W_E,
+    .w_e_min=W_E, .w_i_max=W_I, .w_i_min=W_I, .varphi_0=VARPHI_0,
+    .varphi_k=VARPHI_K, .tau_e=TAU_E, .tau_i=TAU_I, .nu_bar=NU_BAR,
+    .G_e=G_e(TAU_E, D_E),.G_i=G_i(TAU_I, D_I) 
+  };
+
+  // Initialize RNG
+  const gsl_rng_type * T;
+  gsl_rng * r;
+  gsl_rng_env_setup();
+
+  T = gsl_rng_default;
+  r = gsl_rng_alloc (T);
+
+  // allocate memory for the network
+  presynaptic **graph = malloc(N_NEURONS*sizeof(presynaptic*));
+  graph[0] = malloc(sizeof(presynaptic));
+  graph[0]->size=2;
+  graph[0]->w = gsl_vector_alloc(2);
+  graph[0]->idx = gsl_vector_uint_alloc(2);
+  graph[1] = malloc(sizeof(presynaptic));
+  graph[1]->size=1;
+  graph[1]->w = gsl_vector_alloc(1);
+  graph[1]->idx = gsl_vector_uint_alloc(1);
+  // Initialize the network
+  gsl_vector_uint_set(graph[0]->idx,0,1);
+  gsl_vector_set(graph[0]->w,0,W_I);
+  gsl_vector_uint_set(graph[0]->idx,1,1);
+  gsl_vector_set(graph[0]->w,1,W_E);
+  gsl_vector_uint_set(graph[1]->idx,0,0);
+  gsl_vector_set(graph[1]->w,0,W_E);
+
+  // allocate vectors containing u_0 and u_1
+  gsl_vector * u_0 = gsl_vector_alloc(TOTAL_STEPS);
+  gsl_vector * u_1 = gsl_vector_alloc(TOTAL_STEPS);
+
+  // Allocate history
+  GArray **history = malloc_garrays2 (params.n_neurons);
+
+  // Write preamble
+  write_sim_gl_preamble(&params, r);
+
+  // Do the job
+  for (int step_idx=0; step_idx < (int) TOTAL_STEPS; step_idx++)
+    {
+      mk_one_step_2n(step_idx, history, graph, &params,
+		     r, u_0, u_1);
+    }
+
+  // Write results
+  write_sim_2n_results(params.n_neurons, history, u_0, u_1);
+
+  // Free memory taken up by history
+  free_garrays2(history,params.n_neurons);
+
+  gsl_vector_free(u_0);
+  gsl_vector_free(u_1);
+  gsl_rng_free (r);
+  gsl_vector_free(params.G_e);
+  gsl_vector_free(params.G_i);
+  free_graph(graph, params.n_neurons);
+  exit (EXIT_SUCCESS);
+  
+}
+
+<<mk_one_step_2n>>
+
+int write_sim_2n_results(size_t n_neurons, GArray **history,
+			 gsl_vector * u_0,
+			 gsl_vector * u_1)
+{
+  for (size_t n_idx = 0; n_idx < n_neurons; n_idx++)
+    {
+      fprintf(stdout,"# Start neuron %d with %d spikes\n",
+	      (int) n_idx, history[n_idx]->len);
+      for (size_t s_idx = 0; s_idx < history[n_idx]->len; s_idx++)
+	{
+	  fprintf(stdout,"%d\n", g_array_index(history[n_idx],
+					       int,s_idx));
+	}
+      fprintf(stdout,"# End neuron %d\n",(int) n_idx);
+      fprintf(stdout,"\n");
+      fprintf(stdout,"\n");
+    }
+  fprintf(stdout,"# u_0\t u_1\n");
+  for (size_t t_idx=0; t_idx < TOTAL_STEPS; t_idx++)
+    fprintf(stdout,"%10.5g\t %10.5g\n",gsl_vector_get(u_0,t_idx),
+	    gsl_vector_get(u_1,t_idx));
+  return 0;
+}
+
+<<write_sim_gl_preamble>>
+
+<<G_i>>
+
+<<G_e>>
+
+<<g_i>>
+
+<<g_e>>
+
+<<spike_or_not_early>>
+
+<<get_u_i>>
+
+<<varphi>>
+
+<<malloc_garrays2>>
+
+<<free_garrays2>>
+
+<<free_graph>>
+#+END_SRC  
+
+#+NAME: sim_2_neuronsB-compile
+#+BEGIN_SRC shell :results output :exports none
+make P=sim_2_neuronsB
+#+END_SRC 
+
+#+NAME: sim_2_neuronsB-run
+#+BEGIN_SRC shell :results output :exports none
+./sim_2_neuronsB > sim_2_neuronsB_0.txt
+#+END_SRC
+
+We get a portion of the simulated data looking like: 
+
+#+NAME: sim_2_neuronsB_0_fig
+#+BEGIN_SRC gnuplot :session *gnuplot* :file sim_2_neuronsB_0_fig.png :exports results
+set grid
+set xlabel "Time step"
+set ylabel ""
+set key bottom right
+plot [5700:5850] [-5:2] "sim_2_neuronsB_0.txt" \
+     index 2 u 0:1 title "u_0" w l lw 2,\
+     "" index 2 u 0:2 title "u_1" w l lw 2,\
+     "" index 0 u 1:(1.5) title "spikes of neuron 0" w impulses lw 2, \
+     "" index 1 u 1:(-1.5) title "spikes of neuron 1" w impulses lw 2 
+#+END_SRC
+
+#+RESULTS: sim_2_neuronsB_0_fig
+[[file:sim_2_neuronsB_0_fig.png]]
+
